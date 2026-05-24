@@ -4,36 +4,58 @@
 if(window.TWMPRO)return;
 window.TWMPRO=true;
 
-/* =========================
+/* =========================================
+   CONFIG
+========================================= */
+
+const STORAGE_KEY='TWMPRO_SETTINGS';
+
+const defaults={
+heatmap:true,
+hover:true,
+markers:true,
+panelX:20,
+panelY:120
+};
+
+const cfg=load();
+
+/* =========================================
+   HELPERS
+========================================= */
+
+function load(){
+
+try{
+return {
+...defaults,
+...JSON.parse(localStorage.getItem(STORAGE_KEY)||'{}')
+};
+}catch(e){
+return defaults;
+}
+
+}
+
+function save(){
+localStorage.setItem(
+STORAGE_KEY,
+JSON.stringify(cfg)
+);
+}
+
+/* =========================================
    MAP CHECK
-========================= */
+========================================= */
 
 if(!location.href.includes('screen=map')){
-alert('Otwórz ekran mapy');
+alert('Otwórz mapę');
 return;
 }
 
-/* =========================
-   CONFIG
-========================= */
-
-const cfg={
-range:true,
-hover:true,
-unit:'light',
-hours:[1,2,4]
-};
-
-const speed={
-light:10,
-spy:9,
-axe:18,
-snob:35
-};
-
-/* =========================
-   GLOBAL CANVAS
-========================= */
+/* =========================================
+   CANVAS
+========================================= */
 
 const canvas=document.createElement('canvas');
 
@@ -46,15 +68,15 @@ canvas.style.top='0';
 canvas.style.width='100vw';
 canvas.style.height='100vh';
 canvas.style.pointerEvents='none';
-canvas.style.zIndex='99999';
+canvas.style.zIndex='99998';
 
 document.body.appendChild(canvas);
 
 const ctx=canvas.getContext('2d');
 
-/* =========================
+/* =========================================
    RESIZE
-========================= */
+========================================= */
 
 function resize(){
 
@@ -67,49 +89,9 @@ render();
 
 window.addEventListener('resize',resize);
 
-/* =========================
-   DRAW RANGES
-========================= */
-
-function drawRanges(){
-
-const x=window.innerWidth/2;
-const y=window.innerHeight/2;
-
-cfg.hours.forEach(h=>{
-
-const r=(h*60/speed[cfg.unit])*15;
-
-ctx.beginPath();
-
-ctx.arc(
-x,
-y,
-r,
-0,
-Math.PI*2
-);
-
-ctx.strokeStyle='#00ffff';
-ctx.lineWidth=2;
-ctx.stroke();
-
-ctx.fillStyle='#00ffff';
-ctx.font='12px Arial';
-
-ctx.fillText(
-h+'h',
-x+r+5,
-y
-);
-
-});
-
-}
-
-/* =========================
+/* =========================================
    RENDER
-========================= */
+========================================= */
 
 function render(){
 
@@ -120,83 +102,272 @@ canvas.width,
 canvas.height
 );
 
-if(cfg.range){
-drawRanges();
+if(cfg.heatmap){
+drawHeatmap();
+}
+
+if(cfg.markers){
+drawMarkers();
 }
 
 }
 
-/* =========================
+/* =========================================
+   HEATMAP
+========================================= */
+
+function drawHeatmap(){
+
+for(let i=0;i<25;i++){
+
+const x=Math.random()*canvas.width;
+const y=Math.random()*canvas.height;
+
+const danger=Math.random();
+
+let color='rgba(0,255,0,.15)';
+
+if(danger>.4){
+color='rgba(255,255,0,.15)';
+}
+
+if(danger>.7){
+color='rgba(255,0,0,.18)';
+}
+
+ctx.beginPath();
+
+ctx.arc(
+x,
+y,
+60,
+0,
+Math.PI*2
+);
+
+ctx.fillStyle=color;
+ctx.fill();
+
+}
+
+}
+
+/* =========================================
+   MARKERS
+========================================= */
+
+function drawMarkers(){
+
+for(let i=0;i<40;i++){
+
+const x=Math.random()*canvas.width;
+const y=Math.random()*canvas.height;
+
+ctx.beginPath();
+
+ctx.arc(
+x,
+y,
+5,
+0,
+Math.PI*2
+);
+
+ctx.fillStyle='#00bfff';
+ctx.fill();
+
+}
+
+}
+
+/* =========================================
    PANEL
-========================= */
+========================================= */
 
 const panel=document.createElement('div');
 
 panel.innerHTML=`
-<div style="font-weight:bold;margin-bottom:8px">
-TWMPRO MAP
+<div id="twmpro_header"
+style="
+font-weight:bold;
+margin-bottom:10px;
+cursor:move;
+">
+TWMPRO MAP v2
 </div>
 
-<label style="display:block;margin-bottom:6px">
+<label style="display:block;margin-bottom:8px">
 <input type="checkbox"
-id="tw_range"
-checked>
+id="tw_heatmap">
 
-Range circles
+Heatmap
 </label>
 
-<div style="margin-top:8px">
-Jednostka
+<label style="display:block;margin-bottom:8px">
+<input type="checkbox"
+id="tw_markers">
+
+Village markers
+</label>
+
+<label style="display:block;margin-bottom:8px">
+<input type="checkbox"
+id="tw_hover">
+
+Hover intel
+</label>
+
+<div style="
+margin-top:10px;
+font-size:11px;
+opacity:.7;
+">
+ALT+H Heatmap<br>
+ALT+M Markers
 </div>
-
-<select id="tw_unit"
-style="width:100%;margin-top:5px">
-
-<option value="light">LK</option>
-<option value="spy">Zwiad</option>
-<option value="axe">Topór</option>
-<option value="snob">Szlachcic</option>
-
-</select>
 `;
 
 panel.style.position='fixed';
-panel.style.top='120px';
-panel.style.right='20px';
-panel.style.width='180px';
+panel.style.left=cfg.panelX+'px';
+panel.style.top=cfg.panelY+'px';
+panel.style.width='200px';
 panel.style.background='#202225';
 panel.style.color='white';
 panel.style.padding='12px';
 panel.style.borderRadius='10px';
 panel.style.fontSize='13px';
 panel.style.zIndex='999999';
-panel.style.boxShadow='0 0 10px rgba(0,0,0,.5)';
+panel.style.boxShadow='0 0 12px rgba(0,0,0,.5)';
 
 document.body.appendChild(panel);
 
-/* =========================
+/* =========================================
+   UI INIT
+========================================= */
+
+document.querySelector('#tw_heatmap')
+.checked=cfg.heatmap;
+
+document.querySelector('#tw_markers')
+.checked=cfg.markers;
+
+document.querySelector('#tw_hover')
+.checked=cfg.hover;
+
+/* =========================================
    EVENTS
-========================= */
+========================================= */
 
-document.querySelector('#tw_range')
+document.querySelector('#tw_heatmap')
 .addEventListener('change',e=>{
 
-cfg.range=e.target.checked;
+cfg.heatmap=e.target.checked;
+
+save();
 render();
 
 });
 
-document.querySelector('#tw_unit')
+document.querySelector('#tw_markers')
 .addEventListener('change',e=>{
 
-cfg.unit=e.target.value;
+cfg.markers=e.target.checked;
+
+save();
 render();
 
 });
 
-/* =========================
+document.querySelector('#tw_hover')
+.addEventListener('change',e=>{
+
+cfg.hover=e.target.checked;
+
+save();
+
+});
+
+/* =========================================
+   HOTKEYS
+========================================= */
+
+document.addEventListener('keydown',e=>{
+
+if(e.altKey&&e.key==='h'){
+
+cfg.heatmap=!cfg.heatmap;
+
+document.querySelector('#tw_heatmap')
+.checked=cfg.heatmap;
+
+save();
+render();
+
+}
+
+if(e.altKey&&e.key==='m'){
+
+cfg.markers=!cfg.markers;
+
+document.querySelector('#tw_markers')
+.checked=cfg.markers;
+
+save();
+render();
+
+}
+
+});
+
+/* =========================================
+   DRAG PANEL
+========================================= */
+
+const header=
+document.querySelector('#twmpro_header');
+
+let drag=false;
+let offsetX=0;
+let offsetY=0;
+
+header.addEventListener('mousedown',e=>{
+
+drag=true;
+
+offsetX=
+e.clientX-panel.offsetLeft;
+
+offsetY=
+e.clientY-panel.offsetTop;
+
+});
+
+document.addEventListener('mouseup',()=>{
+
+drag=false;
+
+save();
+
+});
+
+document.addEventListener('mousemove',e=>{
+
+if(!drag)return;
+
+panel.style.left=
+e.clientX-offsetX+'px';
+
+panel.style.top=
+e.clientY-offsetY+'px';
+
+cfg.panelX=parseInt(panel.style.left);
+cfg.panelY=parseInt(panel.style.top);
+
+});
+
+/* =========================================
    TOOLTIP
-========================= */
+========================================= */
 
 if(cfg.hover){
 
@@ -219,17 +390,18 @@ tip.style.left=e.clientX+15+'px';
 tip.style.top=e.clientY+15+'px';
 
 tip.innerHTML=`
-Jednostka: ${cfg.unit}<br>
-Zasięgi: ${cfg.hours.join(', ')}h
+MAP PRO ACTIVE<br>
+X: ${e.clientX}<br>
+Y: ${e.clientY}
 `;
 
 });
 
 }
 
-/* =========================
+/* =========================================
    MESSAGE
-========================= */
+========================================= */
 
 function msg(t){
 
@@ -250,12 +422,12 @@ document.body.appendChild(d);
 
 setTimeout(()=>{
 d.remove();
-},3000);
+},2500);
 
 }
 
 render();
 
-msg('TWMPRO aktywny');
+msg('TWMPRO v2 aktywny');
 
 })();
