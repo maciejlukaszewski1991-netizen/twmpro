@@ -2,44 +2,84 @@
 
 'use strict';
 
-if(window.TWMPRO_RUNNING){
-alert('TWMPRO już działa');
+/* =========================================
+   TWMPRO SCANNER v4
+   LIVE + HISTORY + INACTIVE AI
+========================================= */
+
+if(
+window.TWMPRO_RUNNING &&
+document.querySelector('#twmpro_panel')
+){
+document.querySelector('#twmpro_panel')
+.style.display='flex';
 return;
 }
 
 window.TWMPRO_RUNNING=true;
 
 /* =========================================
+   STORAGE
+========================================= */
+
+const STORAGE='TWMPRO_V4';
+const CACHE='TWMPRO_CACHE_V4';
+const HISTORY='TWMPRO_HISTORY_V4';
+
+/* =========================================
+   GAME DATA
+========================================= */
+
+const WORLD=game_data.world;
+const PLAYER_ID=game_data.player.id;
+const PLAYER_NAME=game_data.player.name;
+
+/* =========================================
    CONFIG
 ========================================= */
 
-const STORAGE='TWMPRO_V2';
-
 const defaults={
+
 radius:30,
-panelX:250,
+
+panelX:180,
 panelY:40,
-panelW:900,
-panelH:700,
+panelW:1200,
+panelH:750,
+
 showBarbs:true,
 showPlayers:true,
-showInactive:true,
+
+filterNew:false,
+filterFarmed:false,
+filterIgnored:false,
+filterInactive:false,
+
 sort:'distance'
+
 };
 
 let cfg=load();
 
+/* =========================================
+   LOAD CONFIG
+========================================= */
+
 function load(){
 
 try{
+
 return{
 ...defaults,
 ...JSON.parse(
 localStorage.getItem(STORAGE)||'{}'
 )
 };
+
 }catch(e){
+
 return defaults;
+
 }
 
 }
@@ -60,23 +100,38 @@ JSON.stringify(cfg)
 let villages=[];
 let players={};
 let allies={};
+let history={};
+
 let customData={};
+
 let currentData=[];
 
 /* =========================================
-   LOAD CACHE
+   CACHE LOAD
 ========================================= */
 
 try{
 
 const cache=JSON.parse(
-localStorage.getItem('TWMPRO_CACHE')||'{}'
+localStorage.getItem(CACHE)||'{}'
 );
 
 villages=cache.villages||[];
 players=cache.players||{};
 allies=cache.allies||{};
 customData=cache.customData||{};
+
+}catch(e){}
+
+/* =========================================
+   HISTORY LOAD
+========================================= */
+
+try{
+
+history=JSON.parse(
+localStorage.getItem(HISTORY)||'{}'
+);
 
 }catch(e){}
 
@@ -97,13 +152,14 @@ panel.style.background='#202225';
 panel.style.color='white';
 panel.style.zIndex='999999';
 panel.style.borderRadius='10px';
-panel.style.boxShadow='0 0 15px rgba(0,0,0,.5)';
 panel.style.display='flex';
 panel.style.flexDirection='column';
 panel.style.resize='both';
 panel.style.overflow='hidden';
+panel.style.boxShadow='0 0 15px rgba(0,0,0,.5)';
 
 panel.innerHTML=`
+
 <div id="tw_header"
 style="
 padding:10px;
@@ -112,14 +168,19 @@ cursor:move;
 font-weight:bold;
 font-size:18px;
 ">
-TWMPRO SCANNER v2
+
+TWMPRO SCANNER v4
+<span style="font-size:12px;opacity:.7">
+${WORLD}
+</span>
+
 </div>
 
 <div style="
 padding:10px;
 border-bottom:1px solid #333;
 display:flex;
-gap:6px;
+gap:8px;
 flex-wrap:wrap;
 align-items:center;
 ">
@@ -132,7 +193,7 @@ type="number"
 value="${cfg.radius}"
 style="width:60px">
 
-<button id="tw_scan">
+<button id="tw_update">
 UPDATE
 </button>
 
@@ -146,23 +207,50 @@ placeholder="szukaj..."
 style="width:180px">
 
 <label>
-<input type="checkbox"
+<input
+type="checkbox"
 id="tw_barbs"
 ${cfg.showBarbs?'checked':''}>
 BARB
 </label>
 
 <label>
-<input type="checkbox"
+<input
+type="checkbox"
 id="tw_players"
 ${cfg.showPlayers?'checked':''}>
 PLAYERS
 </label>
 
 <label>
-<input type="checkbox"
+<input
+type="checkbox"
+id="tw_new"
+${cfg.filterNew?'checked':''}>
+NEW
+</label>
+
+<label>
+<input
+type="checkbox"
+id="tw_farmed"
+${cfg.filterFarmed?'checked':''}>
+FARMED
+</label>
+
+<label>
+<input
+type="checkbox"
+id="tw_ignore"
+${cfg.filterIgnored?'checked':''}>
+IGNORE
+</label>
+
+<label>
+<input
+type="checkbox"
 id="tw_inactive"
-${cfg.showInactive?'checked':''}>
+${cfg.filterInactive?'checked':''}>
 INACTIVE
 </label>
 
@@ -172,8 +260,8 @@ INACTIVE
 id="tw_status"
 style="
 padding:8px;
-color:#00ff88;
 font-size:12px;
+color:#00ff88;
 border-bottom:1px solid #333;
 ">
 READY
@@ -187,6 +275,7 @@ overflow:auto;
 font-size:12px;
 ">
 </div>
+
 `;
 
 document.body.appendChild(panel);
@@ -227,7 +316,7 @@ y:+c[1]
 function saveCache(){
 
 localStorage.setItem(
-'TWMPRO_CACHE',
+CACHE,
 JSON.stringify({
 villages,
 players,
@@ -238,8 +327,62 @@ customData
 
 }
 
+function saveHistory(){
+
+localStorage.setItem(
+HISTORY,
+JSON.stringify(history)
+);
+
+}
+
 /* =========================================
-   MAP DOWNLOAD
+   INACTIVE SCORE
+========================================= */
+
+function inactiveScore(player){
+
+if(!player)return 0;
+
+let score=0;
+
+if(!player.ally){
+score+=20;
+}
+
+if(player.villages<3){
+score+=20;
+}
+
+if(player.points<2000){
+score+=10;
+}
+
+/* HISTORY CHECK */
+
+const h=history[player.id];
+
+if(h){
+
+const diff=
+player.points-h.points;
+
+if(diff===0){
+score+=50;
+}
+
+if(diff<100){
+score+=20;
+}
+
+}
+
+return score;
+
+}
+
+/* =========================================
+   MAP UPDATE
 ========================================= */
 
 async function updateMap(){
@@ -274,11 +417,20 @@ playerTxt
 const p=l.split(',');
 
 players[p[0]]={
+
 id:p[0],
 name:p[1],
 ally:p[2],
 villages:+p[3],
 points:+p[4]
+
+};
+
+/* HISTORY */
+
+history[p[0]]={
+points:+p[4],
+time:Date.now()
 };
 
 });
@@ -295,9 +447,11 @@ allyTxt
 const a=l.split(',');
 
 allies[a[0]]={
+
 id:a[0],
 name:a[1],
 tag:a[2]
+
 };
 
 });
@@ -314,23 +468,42 @@ villageTxt
 const v=l.split(',');
 
 villages.push({
+
 id:v[0],
 name:v[1],
 x:+v[2],
 y:+v[3],
 playerId:v[4],
 points:+v[5]
+
 });
 
 });
 
 saveCache();
+saveHistory();
 
 setStatus(
-'Mapa zaktualizowana: '+
-villages.length+
-' wiosek'
+'Mapa zaktualizowana'
 );
+
+}
+
+/* =========================================
+   STATUS SYSTEM
+========================================= */
+
+function nextStatus(current){
+
+if(!current)return'new';
+
+if(current==='new')
+return'farmed';
+
+if(current==='farmed')
+return'ignore';
+
+return'new';
 
 }
 
@@ -355,6 +528,7 @@ document.querySelector('#tw_search')
 
 currentData=
 villages
+
 .map(v=>{
 
 v.distance=
@@ -368,7 +542,9 @@ v.y
 return v;
 
 })
+
 .filter(v=>v.distance<=cfg.radius)
+
 .filter(v=>{
 
 const isBarb=!v.playerId;
@@ -379,14 +555,29 @@ return false;
 if(!isBarb&&!cfg.showPlayers)
 return false;
 
+const cd=
+customData[v.id]||{};
+
+if(cfg.filterNew&&cd.status!=='new')
+return false;
+
+if(cfg.filterFarmed&&cd.status!=='farmed')
+return false;
+
+if(cfg.filterIgnored&&cd.status!=='ignore')
+return false;
+
 const p=players[v.playerId];
 
+const inactive=
+inactiveScore(p)>=60;
+
 if(
-cfg.showInactive===false &&
-p &&
-p.villages<10
-)
+cfg.filterInactive &&
+!inactive
+){
 return false;
+}
 
 if(!search)return true;
 
@@ -396,22 +587,11 @@ v.name.toLowerCase().includes(search) ||
 );
 
 })
+
 .sort((a,b)=>{
 
 if(cfg.sort==='points'){
 return b.points-a.points;
-}
-
-if(cfg.sort==='player'){
-
-const pa=
-players[a.playerId]?.name||'';
-
-const pb=
-players[b.playerId]?.name||'';
-
-return pa.localeCompare(pb);
-
 }
 
 return a.distance-b.distance;
@@ -429,6 +609,7 @@ renderTable();
 function renderTable(){
 
 let html=`
+
 <table style="
 width:100%;
 border-collapse:collapse;
@@ -441,34 +622,13 @@ top:0;
 z-index:5;
 ">
 
-<th
-class="tw_sort"
-data-sort="player"
-style="cursor:pointer">
-PLAYER
-</th>
-
+<th>PLAYER</th>
 <th>COORD</th>
-
-<th
-class="tw_sort"
-data-sort="distance"
-style="cursor:pointer">
-DIST
-</th>
-
-<th
-class="tw_sort"
-data-sort="points"
-style="cursor:pointer">
-POINTS
-</th>
-
+<th>DIST</th>
+<th>POINTS</th>
 <th>ALLY</th>
-
+<th>INACTIVE</th>
 <th>STATUS</th>
-
-<th>ACTION</th>
 
 </tr>
 `;
@@ -484,19 +644,51 @@ const cd=
 customData[v.id]||{};
 
 const inactive=
-p&&p.villages<10;
+inactiveScore(p);
 
 let bg='';
 
 if(!p){
-bg='rgba(120,120,120,.15)';
-}else if(inactive){
-bg='rgba(0,255,0,.12)';
+
+bg='rgba(120,120,120,.12)';
+
 }else{
+
 bg='rgba(255,0,0,.08)';
+
 }
 
+if(inactive>=60){
+
+bg='rgba(0,255,0,.12)';
+
+}
+
+if(cd.status==='farmed'){
+
+bg='rgba(255,255,0,.10)';
+
+}
+
+if(cd.status==='ignore'){
+
+bg='rgba(120,120,120,.22)';
+
+}
+
+let status='';
+
+if(cd.status==='new')
+status='🟢 NEW';
+
+if(cd.status==='farmed')
+status='🟡 FARMED';
+
+if(cd.status==='ignore')
+status='⚫ IGNORE';
+
 html+=`
+
 <tr style="
 border-bottom:1px solid #333;
 background:${bg};
@@ -531,15 +723,18 @@ ${ally?ally.tag:''}
 
 <td>
 
-${cd.farmed?'🟢 FARMED':''}
+${inactive}
 
 </td>
 
 <td>
 
 <button
-onclick="TWMPRO_MARK('${v.id}')">
-MARK
+onclick="TWMPRO_STATUS('${v.id}')"
+style="width:120px">
+
+${status||'SET STATUS'}
+
 </button>
 
 </td>
@@ -554,39 +749,22 @@ html+=`</table>`;
 document.querySelector('#tw_table')
 .innerHTML=html;
 
-/* SORT EVENTS */
-
-document
-.querySelectorAll('.tw_sort')
-.forEach(el=>{
-
-el.onclick=()=>{
-
-cfg.sort=
-el.dataset.sort;
-
-save();
-
-scan();
-
-};
-
-});
-
 }
 
 /* =========================================
-   GLOBAL FUNCTIONS
+   GLOBAL STATUS
 ========================================= */
 
-window.TWMPRO_MARK=id=>{
+window.TWMPRO_STATUS=id=>{
 
 if(!customData[id]){
 customData[id]={};
 }
 
-customData[id].farmed=
-!customData[id].farmed;
+customData[id].status=
+nextStatus(
+customData[id].status
+);
 
 saveCache();
 
@@ -598,7 +776,7 @@ scan();
    EVENTS
 ========================================= */
 
-document.querySelector('#tw_scan')
+document.querySelector('#tw_update')
 .onclick=async()=>{
 
 await updateMap();
@@ -628,10 +806,37 @@ scan();
 
 };
 
+document.querySelector('#tw_new')
+.onchange=e=>{
+
+cfg.filterNew=e.target.checked;
+save();
+scan();
+
+};
+
+document.querySelector('#tw_farmed')
+.onchange=e=>{
+
+cfg.filterFarmed=e.target.checked;
+save();
+scan();
+
+};
+
+document.querySelector('#tw_ignore')
+.onchange=e=>{
+
+cfg.filterIgnored=e.target.checked;
+save();
+scan();
+
+};
+
 document.querySelector('#tw_inactive')
 .onchange=e=>{
 
-cfg.showInactive=e.target.checked;
+cfg.filterInactive=e.target.checked;
 save();
 scan();
 
@@ -642,7 +847,8 @@ document.querySelector('#tw_close')
 
 panel.remove();
 
-window.TWMPRO_RUNNING=false;
+delete window.TWMPRO_RUNNING;
+delete window.TWMPRO_STATUS;
 
 };
 
@@ -651,6 +857,7 @@ window.TWMPRO_RUNNING=false;
 ========================================= */
 
 let drag=false;
+
 let offsetX=0;
 let offsetY=0;
 
