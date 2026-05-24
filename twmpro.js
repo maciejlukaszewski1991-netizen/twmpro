@@ -3,18 +3,18 @@
 'use strict';
 
 /* =========================================
-   TWMPRO SCANNER v4
-   LIVE + HISTORY + INACTIVE AI
+   FULL CLEANUP
 ========================================= */
 
-if(
-window.TWMPRO_RUNNING &&
-document.querySelector('#twmpro_panel')
-){
-document.querySelector('#twmpro_panel')
-.style.display='flex';
-return;
+if(window.TWMPRO_DESTROY){
+
+window.TWMPRO_DESTROY();
+
 }
+
+/* =========================================
+   RUNNING
+========================================= */
 
 window.TWMPRO_RUNNING=true;
 
@@ -22,17 +22,9 @@ window.TWMPRO_RUNNING=true;
    STORAGE
 ========================================= */
 
-const STORAGE='TWMPRO_V4';
-const CACHE='TWMPRO_CACHE_V4';
-const HISTORY='TWMPRO_HISTORY_V4';
-
-/* =========================================
-   GAME DATA
-========================================= */
-
-const WORLD=game_data.world;
-const PLAYER_ID=game_data.player.id;
-const PLAYER_NAME=game_data.player.name;
+const STORAGE='TWMPRO_V5';
+const CACHE='TWMPRO_CACHE_V5';
+const HISTORY='TWMPRO_HISTORY_V5';
 
 /* =========================================
    CONFIG
@@ -40,20 +32,19 @@ const PLAYER_NAME=game_data.player.name;
 
 const defaults={
 
-radius:30,
+radius:25,
 
-panelX:180,
+panelX:120,
 panelY:40,
-panelW:1200,
-panelH:750,
+panelW:950,
+panelH:600,
 
 showBarbs:true,
 showPlayers:true,
 
-filterNew:false,
-filterFarmed:false,
-filterIgnored:false,
 filterInactive:false,
+filterFarmed:false,
+filterNew:false,
 
 sort:'distance'
 
@@ -62,7 +53,7 @@ sort:'distance'
 let cfg=load();
 
 /* =========================================
-   LOAD CONFIG
+   LOAD
 ========================================= */
 
 function load(){
@@ -107,7 +98,7 @@ let customData={};
 let currentData=[];
 
 /* =========================================
-   CACHE LOAD
+   CACHE
 ========================================= */
 
 try{
@@ -123,10 +114,6 @@ customData=cache.customData||{};
 
 }catch(e){}
 
-/* =========================================
-   HISTORY LOAD
-========================================= */
-
 try{
 
 history=JSON.parse(
@@ -134,6 +121,24 @@ localStorage.getItem(HISTORY)||'{}'
 );
 
 }catch(e){}
+
+/* =========================================
+   EVENTS STORE
+========================================= */
+
+const listeners=[];
+
+function addListener(el,type,fn){
+
+el.addEventListener(type,fn);
+
+listeners.push({
+el,
+type,
+fn
+});
+
+}
 
 /* =========================================
    PANEL
@@ -151,60 +156,63 @@ panel.style.height=cfg.panelH+'px';
 panel.style.background='#202225';
 panel.style.color='white';
 panel.style.zIndex='999999';
-panel.style.borderRadius='10px';
+panel.style.borderRadius='8px';
 panel.style.display='flex';
 panel.style.flexDirection='column';
 panel.style.resize='both';
 panel.style.overflow='hidden';
-panel.style.boxShadow='0 0 15px rgba(0,0,0,.5)';
+panel.style.boxShadow='0 0 10px rgba(0,0,0,.5)';
+panel.style.fontSize='11px';
 
 panel.innerHTML=`
 
 <div id="tw_header"
 style="
-padding:10px;
+padding:8px;
 background:#111;
 cursor:move;
 font-weight:bold;
-font-size:18px;
+font-size:15px;
 ">
 
-TWMPRO SCANNER v4
-<span style="font-size:12px;opacity:.7">
-${WORLD}
-</span>
+TWMPRO v5
 
 </div>
 
 <div style="
-padding:10px;
+padding:6px;
 border-bottom:1px solid #333;
 display:flex;
-gap:8px;
+gap:6px;
 flex-wrap:wrap;
 align-items:center;
+font-size:11px;
 ">
 
-Radius
+R
 
 <input
 id="tw_radius"
 type="number"
 value="${cfg.radius}"
-style="width:60px">
+style="width:50px">
 
 <button id="tw_update">
 UPDATE
 </button>
 
+<button id="tw_auto">
+AUTO AI
+</button>
+
 <button id="tw_close">
-WYŁĄCZ
+X
 </button>
 
 <input
 id="tw_search"
-placeholder="szukaj..."
-style="width:180px">
+placeholder="search"
+style="width:140px">
 
 <label>
 <input
@@ -225,6 +233,14 @@ PLAYERS
 <label>
 <input
 type="checkbox"
+id="tw_inactive"
+${cfg.filterInactive?'checked':''}>
+INACTIVE
+</label>
+
+<label>
+<input
+type="checkbox"
 id="tw_new"
 ${cfg.filterNew?'checked':''}>
 NEW
@@ -238,29 +254,13 @@ ${cfg.filterFarmed?'checked':''}>
 FARMED
 </label>
 
-<label>
-<input
-type="checkbox"
-id="tw_ignore"
-${cfg.filterIgnored?'checked':''}>
-IGNORE
-</label>
-
-<label>
-<input
-type="checkbox"
-id="tw_inactive"
-${cfg.filterInactive?'checked':''}>
-INACTIVE
-</label>
-
 </div>
 
 <div
 id="tw_status"
 style="
-padding:8px;
-font-size:12px;
+padding:5px;
+font-size:11px;
 color:#00ff88;
 border-bottom:1px solid #333;
 ">
@@ -272,10 +272,9 @@ id="tw_table"
 style="
 flex:1;
 overflow:auto;
-font-size:12px;
+font-size:11px;
 ">
 </div>
-
 `;
 
 document.body.appendChild(panel);
@@ -337,28 +336,31 @@ JSON.stringify(history)
 }
 
 /* =========================================
-   INACTIVE SCORE
+   INACTIVE AI
 ========================================= */
 
 function inactiveScore(player){
 
 if(!player)return 0;
 
+/* IGNORE BARBS */
+
+if(player.id==='0')
+return 0;
+
 let score=0;
 
 if(!player.ally){
-score+=20;
+score+=25;
 }
 
 if(player.villages<3){
-score+=20;
+score+=25;
 }
 
-if(player.points<2000){
+if(player.points<3000){
 score+=10;
 }
-
-/* HISTORY CHECK */
 
 const h=history[player.id];
 
@@ -382,30 +384,59 @@ return score;
 }
 
 /* =========================================
-   MAP UPDATE
+   AUTO ANALYZE
+========================================= */
+
+function autoAnalyze(){
+
+villages.forEach(v=>{
+
+if(!v.playerId)return;
+
+const p=players[v.playerId];
+
+if(!p)return;
+
+const score=
+inactiveScore(p);
+
+if(score>=60){
+
+if(!customData[v.id]){
+customData[v.id]={};
+}
+
+customData[v.id].status='inactive';
+
+}
+
+});
+
+saveCache();
+
+scan();
+
+}
+
+/* =========================================
+   UPDATE MAP
 ========================================= */
 
 async function updateMap(){
 
-setStatus('Pobieranie village.txt');
+setStatus('Updating map...');
 
 const villageTxt=
 await fetch('/map/village.txt')
 .then(r=>r.text());
 
-setStatus('Pobieranie player.txt');
-
 const playerTxt=
 await fetch('/map/player.txt')
 .then(r=>r.text());
 
-setStatus('Pobieranie ally.txt');
-
 const allyTxt=
 await fetch('/map/ally.txt')
 .then(r=>r.text());
-
-/* PLAYERS */
 
 players={};
 
@@ -426,16 +457,12 @@ points:+p[4]
 
 };
 
-/* HISTORY */
-
 history[p[0]]={
 points:+p[4],
 time:Date.now()
 };
 
 });
-
-/* ALLIES */
 
 allies={};
 
@@ -447,16 +474,11 @@ allyTxt
 const a=l.split(',');
 
 allies[a[0]]={
-
 id:a[0],
-name:a[1],
 tag:a[2]
-
 };
 
 });
-
-/* VILLAGES */
 
 villages=[];
 
@@ -484,26 +506,8 @@ saveCache();
 saveHistory();
 
 setStatus(
-'Mapa zaktualizowana'
+'Loaded: '+villages.length
 );
-
-}
-
-/* =========================================
-   STATUS SYSTEM
-========================================= */
-
-function nextStatus(current){
-
-if(!current)return'new';
-
-if(current==='new')
-return'farmed';
-
-if(current==='farmed')
-return'ignore';
-
-return'new';
 
 }
 
@@ -555,26 +559,28 @@ return false;
 if(!isBarb&&!cfg.showPlayers)
 return false;
 
+const p=players[v.playerId];
+
 const cd=
 customData[v.id]||{};
 
-if(cfg.filterNew&&cd.status!=='new')
-return false;
-
-if(cfg.filterFarmed&&cd.status!=='farmed')
-return false;
-
-if(cfg.filterIgnored&&cd.status!=='ignore')
-return false;
-
-const p=players[v.playerId];
-
-const inactive=
-inactiveScore(p)>=60;
-
 if(
 cfg.filterInactive &&
-!inactive
+cd.status!=='inactive'
+){
+return false;
+}
+
+if(
+cfg.filterNew &&
+cd.status!=='new'
+){
+return false;
+}
+
+if(
+cfg.filterFarmed &&
+cd.status!=='farmed'
 ){
 return false;
 }
@@ -588,15 +594,7 @@ v.name.toLowerCase().includes(search) ||
 
 })
 
-.sort((a,b)=>{
-
-if(cfg.sort==='points'){
-return b.points-a.points;
-}
-
-return a.distance-b.distance;
-
-});
+.sort((a,b)=>a.distance-b.distance);
 
 renderTable();
 
@@ -619,15 +617,14 @@ border-collapse:collapse;
 background:#111;
 position:sticky;
 top:0;
-z-index:5;
 ">
 
 <th>PLAYER</th>
 <th>COORD</th>
-<th>DIST</th>
-<th>POINTS</th>
+<th>D</th>
+<th>PTS</th>
 <th>ALLY</th>
-<th>INACTIVE</th>
+<th>AI</th>
 <th>STATUS</th>
 
 </tr>
@@ -643,22 +640,18 @@ allies[p?.ally];
 const cd=
 customData[v.id]||{};
 
-const inactive=
-inactiveScore(p);
+const ai=
+p?inactiveScore(p):0;
 
 let bg='';
 
 if(!p){
 
-bg='rgba(120,120,120,.12)';
-
-}else{
-
-bg='rgba(255,0,0,.08)';
+bg='rgba(120,120,120,.10)';
 
 }
 
-if(inactive>=60){
+if(cd.status==='inactive'){
 
 bg='rgba(0,255,0,.12)';
 
@@ -669,23 +662,6 @@ if(cd.status==='farmed'){
 bg='rgba(255,255,0,.10)';
 
 }
-
-if(cd.status==='ignore'){
-
-bg='rgba(120,120,120,.22)';
-
-}
-
-let status='';
-
-if(cd.status==='new')
-status='🟢 NEW';
-
-if(cd.status==='farmed')
-status='🟡 FARMED';
-
-if(cd.status==='ignore')
-status='⚫ IGNORE';
 
 html+=`
 
@@ -704,13 +680,15 @@ ${p?p.name:'BARB'}
 href="/game.php?village=${game_data.village.id}&screen=map#${v.x};${v.y}"
 target="_blank"
 style="color:#6cf">
+
 ${v.x}|${v.y}
+
 </a>
 
 </td>
 
 <td>
-${v.distance.toFixed(2)}
+${v.distance.toFixed(1)}
 </td>
 
 <td>
@@ -722,21 +700,11 @@ ${ally?ally.tag:''}
 </td>
 
 <td>
-
-${inactive}
-
+${ai}
 </td>
 
 <td>
-
-<button
-onclick="TWMPRO_STATUS('${v.id}')"
-style="width:120px">
-
-${status||'SET STATUS'}
-
-</button>
-
+${cd.status||''}
 </td>
 
 </tr>
@@ -752,105 +720,46 @@ document.querySelector('#tw_table')
 }
 
 /* =========================================
-   GLOBAL STATUS
-========================================= */
-
-window.TWMPRO_STATUS=id=>{
-
-if(!customData[id]){
-customData[id]={};
-}
-
-customData[id].status=
-nextStatus(
-customData[id].status
-);
-
-saveCache();
-
-scan();
-
-};
-
-/* =========================================
    EVENTS
 ========================================= */
 
-document.querySelector('#tw_update')
-.onclick=async()=>{
+addListener(
+document.querySelector('#tw_update'),
+'click',
+async()=>{
 
 await updateMap();
 
 scan();
 
-};
+}
+);
 
-document.querySelector('#tw_search')
-.oninput=scan;
+addListener(
+document.querySelector('#tw_auto'),
+'click',
+()=>{
 
-document.querySelector('#tw_barbs')
-.onchange=e=>{
+autoAnalyze();
 
-cfg.showBarbs=e.target.checked;
-save();
-scan();
+}
+);
 
-};
+addListener(
+document.querySelector('#tw_search'),
+'input',
+scan
+);
 
-document.querySelector('#tw_players')
-.onchange=e=>{
+addListener(
+document.querySelector('#tw_close'),
+'click',
+()=>{
 
-cfg.showPlayers=e.target.checked;
-save();
-scan();
+destroy();
 
-};
-
-document.querySelector('#tw_new')
-.onchange=e=>{
-
-cfg.filterNew=e.target.checked;
-save();
-scan();
-
-};
-
-document.querySelector('#tw_farmed')
-.onchange=e=>{
-
-cfg.filterFarmed=e.target.checked;
-save();
-scan();
-
-};
-
-document.querySelector('#tw_ignore')
-.onchange=e=>{
-
-cfg.filterIgnored=e.target.checked;
-save();
-scan();
-
-};
-
-document.querySelector('#tw_inactive')
-.onchange=e=>{
-
-cfg.filterInactive=e.target.checked;
-save();
-scan();
-
-};
-
-document.querySelector('#tw_close')
-.onclick=()=>{
-
-panel.remove();
-
-delete window.TWMPRO_RUNNING;
-delete window.TWMPRO_STATUS;
-
-};
+}
+);
 
 /* =========================================
    DRAG
@@ -861,9 +770,10 @@ let drag=false;
 let offsetX=0;
 let offsetY=0;
 
-document
-.querySelector('#tw_header')
-.addEventListener('mousedown',e=>{
+addListener(
+document.querySelector('#tw_header'),
+'mousedown',
+e=>{
 
 drag=true;
 
@@ -873,9 +783,13 @@ e.clientX-panel.offsetLeft;
 offsetY=
 e.clientY-panel.offsetTop;
 
-});
+}
+);
 
-document.addEventListener('mouseup',()=>{
+addListener(
+document,
+'mouseup',
+()=>{
 
 drag=false;
 
@@ -886,9 +800,13 @@ cfg.panelH=panel.offsetHeight;
 
 save();
 
-});
+}
+);
 
-document.addEventListener('mousemove',e=>{
+addListener(
+document,
+'mousemove',
+e=>{
 
 if(!drag)return;
 
@@ -898,7 +816,32 @@ e.clientX-offsetX+'px';
 panel.style.top=
 e.clientY-offsetY+'px';
 
+}
+);
+
+/* =========================================
+   DESTROY
+========================================= */
+
+function destroy(){
+
+listeners.forEach(l=>{
+
+l.el.removeEventListener(
+l.type,
+l.fn
+);
+
 });
+
+panel.remove();
+
+delete window.TWMPRO_RUNNING;
+delete window.TWMPRO_DESTROY;
+
+}
+
+window.TWMPRO_DESTROY=destroy;
 
 /* =========================================
    INIT
@@ -913,9 +856,7 @@ await updateMap();
 scan();
 
 setStatus(
-'Załadowano '+
-currentData.length+
-' wiosek'
+'Villages: '+currentData.length
 );
 
 })();
