@@ -3,18 +3,17 @@
 'use strict';
 
 /* =========================================
-   FULL CLEANUP
+   TWMPRO v7
+   PLAYER + BARB ANALYZER
+========================================= */
+
+/* =========================================
+   CLEAN START
 ========================================= */
 
 if(window.TWMPRO_DESTROY){
-
 window.TWMPRO_DESTROY();
-
 }
-
-/* =========================================
-   RUNNING
-========================================= */
 
 window.TWMPRO_RUNNING=true;
 
@@ -22,9 +21,7 @@ window.TWMPRO_RUNNING=true;
    STORAGE
 ========================================= */
 
-const STORAGE='TWMPRO_V5';
-const CACHE='TWMPRO_CACHE_V5';
-const HISTORY='TWMPRO_HISTORY_V5';
+const STORAGE='TWMPRO_V7';
 
 /* =========================================
    CONFIG
@@ -32,29 +29,25 @@ const HISTORY='TWMPRO_HISTORY_V5';
 
 const defaults={
 
-radius:25,
+radius:20,
 
-panelX:120,
+panelX:100,
 panelY:40,
-panelW:950,
+panelW:1000,
 panelH:600,
 
 showBarbs:true,
 showPlayers:true,
 
-filterInactive:false,
-filterFarmed:false,
-filterNew:false,
+filterFresh:false,
+filterOld:false,
 
-sort:'distance'
+filterInactive:false,
+filterActive:false
 
 };
 
 let cfg=load();
-
-/* =========================================
-   LOAD
-========================================= */
 
 function load(){
 
@@ -91,39 +84,12 @@ JSON.stringify(cfg)
 let villages=[];
 let players={};
 let allies={};
-let history={};
 
-let customData={};
-
-let currentData=[];
+let playerActivity={};
+let barbInfo={};
 
 /* =========================================
-   CACHE
-========================================= */
-
-try{
-
-const cache=JSON.parse(
-localStorage.getItem(CACHE)||'{}'
-);
-
-villages=cache.villages||[];
-players=cache.players||{};
-allies=cache.allies||{};
-customData=cache.customData||{};
-
-}catch(e){}
-
-try{
-
-history=JSON.parse(
-localStorage.getItem(HISTORY)||'{}'
-);
-
-}catch(e){}
-
-/* =========================================
-   EVENTS STORE
+   EVENTS
 ========================================= */
 
 const listeners=[];
@@ -161,8 +127,8 @@ panel.style.display='flex';
 panel.style.flexDirection='column';
 panel.style.resize='both';
 panel.style.overflow='hidden';
-panel.style.boxShadow='0 0 10px rgba(0,0,0,.5)';
 panel.style.fontSize='11px';
+panel.style.boxShadow='0 0 10px rgba(0,0,0,.5)';
 
 panel.innerHTML=`
 
@@ -172,21 +138,19 @@ padding:8px;
 background:#111;
 cursor:move;
 font-weight:bold;
-font-size:15px;
+font-size:14px;
 ">
 
-TWMPRO v5
+TWMPRO v7
 
 </div>
 
 <div style="
 padding:6px;
-border-bottom:1px solid #333;
 display:flex;
 gap:6px;
 flex-wrap:wrap;
-align-items:center;
-font-size:11px;
+border-bottom:1px solid #333;
 ">
 
 R
@@ -197,12 +161,8 @@ type="number"
 value="${cfg.radius}"
 style="width:50px">
 
-<button id="tw_update">
-UPDATE
-</button>
-
-<button id="tw_auto">
-AUTO AI
+<button id="tw_scan">
+SCAN
 </button>
 
 <button id="tw_close">
@@ -233,6 +193,22 @@ PLAYERS
 <label>
 <input
 type="checkbox"
+id="tw_fresh"
+${cfg.filterFresh?'checked':''}>
+FRESH
+</label>
+
+<label>
+<input
+type="checkbox"
+id="tw_old"
+${cfg.filterOld?'checked':''}>
+OLD
+</label>
+
+<label>
+<input
+type="checkbox"
 id="tw_inactive"
 ${cfg.filterInactive?'checked':''}>
 INACTIVE
@@ -241,17 +217,9 @@ INACTIVE
 <label>
 <input
 type="checkbox"
-id="tw_new"
-${cfg.filterNew?'checked':''}>
-NEW
-</label>
-
-<label>
-<input
-type="checkbox"
-id="tw_farmed"
-${cfg.filterFarmed?'checked':''}>
-FARMED
+id="tw_active"
+${cfg.filterActive?'checked':''}>
+ACTIVE
 </label>
 
 </div>
@@ -260,9 +228,8 @@ FARMED
 id="tw_status"
 style="
 padding:5px;
-font-size:11px;
-color:#00ff88;
 border-bottom:1px solid #333;
+color:#00ff88;
 ">
 READY
 </div>
@@ -272,9 +239,9 @@ id="tw_table"
 style="
 flex:1;
 overflow:auto;
-font-size:11px;
 ">
 </div>
+
 `;
 
 document.body.appendChild(panel);
@@ -312,130 +279,16 @@ y:+c[1]
 
 }
 
-function saveCache(){
-
-localStorage.setItem(
-CACHE,
-JSON.stringify({
-villages,
-players,
-allies,
-customData
-})
-);
-
-}
-
-function saveHistory(){
-
-localStorage.setItem(
-HISTORY,
-JSON.stringify(history)
-);
-
-}
-
 /* =========================================
-   INACTIVE AI
+   LOAD MAP
 ========================================= */
 
-function inactiveScore(player){
+async function loadMap(){
 
-if(!player)return 0;
-
-/* IGNORE BARBS */
-
-if(player.id==='0')
-return 0;
-
-let score=0;
-
-if(!player.ally){
-score+=25;
-}
-
-if(player.villages<3){
-score+=25;
-}
-
-if(player.points<3000){
-score+=10;
-}
-
-const h=history[player.id];
-
-if(h){
-
-const diff=
-player.points-h.points;
-
-if(diff===0){
-score+=50;
-}
-
-if(diff<100){
-score+=20;
-}
-
-}
-
-return score;
-
-}
-
-/* =========================================
-   AUTO ANALYZE
-========================================= */
-
-function autoAnalyze(){
-
-villages.forEach(v=>{
-
-if(!v.playerId)return;
-
-const p=players[v.playerId];
-
-if(!p)return;
-
-const score=
-inactiveScore(p);
-
-if(score>=60){
-
-if(!customData[v.id]){
-customData[v.id]={};
-}
-
-customData[v.id].status='inactive';
-
-}
-
-});
-
-saveCache();
-
-scan();
-
-}
-
-/* =========================================
-   UPDATE MAP
-========================================= */
-
-async function updateMap(){
-
-setStatus('Updating map...');
-
-const villageTxt=
-await fetch('/map/village.txt')
-.then(r=>r.text());
+setStatus('Loading players');
 
 const playerTxt=
 await fetch('/map/player.txt')
-.then(r=>r.text());
-
-const allyTxt=
-await fetch('/map/ally.txt')
 .then(r=>r.text());
 
 players={};
@@ -457,12 +310,13 @@ points:+p[4]
 
 };
 
-history[p[0]]={
-points:+p[4],
-time:Date.now()
-};
-
 });
+
+setStatus('Loading allies');
+
+const allyTxt=
+await fetch('/map/ally.txt')
+.then(r=>r.text());
 
 allies={};
 
@@ -474,82 +328,223 @@ allyTxt
 const a=l.split(',');
 
 allies[a[0]]={
-id:a[0],
 tag:a[2]
 };
 
 });
 
+setStatus('Loading villages');
+
+const villageTxt=
+await fetch('/map/village.txt')
+.then(r=>r.text());
+
+const lines=
+villageTxt.split('\n');
+
+const c=currentCoord();
+
+const radius=
++document.querySelector('#tw_radius')
+.value;
+
 villages=[];
 
-villageTxt
-.trim()
-.split('\n')
-.forEach(l=>{
+let processed=0;
 
-const v=l.split(',');
+for(const line of lines){
+
+processed++;
+
+if(processed%50000===0){
+
+setStatus(
+'Processing '+processed
+);
+
+await new Promise(r=>
+setTimeout(r,0)
+);
+
+}
+
+if(!line)continue;
+
+const v=line.split(',');
+
+const x=+v[2];
+const y=+v[3];
+
+const d=
+dist(
+c.x,
+c.y,
+x,
+y
+);
+
+if(d>radius)continue;
 
 villages.push({
 
 id:v[0],
 name:v[1],
-x:+v[2],
-y:+v[3],
+x,
+y,
 playerId:v[4],
-points:+v[5]
+points:+v[5],
+distance:d
 
 });
 
-});
-
-saveCache();
-saveHistory();
+}
 
 setStatus(
-'Loaded: '+villages.length
+'Loaded '+villages.length
 );
+
+renderTable();
 
 }
 
 /* =========================================
-   SCAN
+   PLAYER CHECK
 ========================================= */
 
-function scan(){
+window.TWMPRO_CHECK_PLAYER=
+async(playerId,name)=>{
 
-const c=currentCoord();
+setStatus(
+'Checking '+name
+);
 
-cfg.radius=
-+document.querySelector('#tw_radius')
-.value;
+try{
 
-save();
+/* =====================================
+   TWSTATS URL
+===================================== */
+
+const world=
+game_data.world;
+
+const url=
+`https://${world}.twstats.com/pl${world.replace('pl','')}/index.php?page=player&id=${playerId}`;
+
+/* =====================================
+   OPEN TAB
+===================================== */
+
+window.open(url,'_blank');
+
+/* =====================================
+   SIMPLE AI
+===================================== */
+
+const p=players[playerId];
+
+let active='ACTIVE';
+
+if(
+p.villages<3 &&
+p.points<3000
+){
+active='INACTIVE';
+}
+
+playerActivity[playerId]={
+
+day1:'+0',
+day2:'+0',
+week:'+0',
+
+status:active
+
+};
+
+renderTable();
+
+setStatus(
+'Done'
+);
+
+}catch(e){
+
+setStatus(
+'TWStats error'
+);
+
+}
+
+};
+
+/* =========================================
+   BARB CHECK
+========================================= */
+
+window.TWMPRO_CHECK_BARB=
+async(villageId)=>{
+
+setStatus(
+'Checking barb'
+);
+
+try{
+
+const url=
+`/game.php?village=${game_data.village.id}&screen=info_village&id=${villageId}`;
+
+const html=
+await fetch(url)
+.then(r=>r.text());
+
+/* =====================================
+   LAST ATTACK
+===================================== */
+
+let status='OLD';
+
+if(
+html.includes('Ostatni atak')
+){
+
+status='FRESH';
+
+}
+
+barbInfo[villageId]={
+
+status
+
+};
+
+renderTable();
+
+setStatus(
+'Barb analyzed'
+);
+
+}catch(e){
+
+setStatus(
+'Barb error'
+);
+
+}
+
+};
+
+/* =========================================
+   FILTER
+========================================= */
+
+function filtered(){
 
 const search=
 document.querySelector('#tw_search')
 .value
 .toLowerCase();
 
-currentData=
-villages
-
-.map(v=>{
-
-v.distance=
-dist(
-c.x,
-c.y,
-v.x,
-v.y
-);
-
-return v;
-
-})
-
-.filter(v=>v.distance<=cfg.radius)
-
-.filter(v=>{
+return villages.filter(v=>{
 
 const isBarb=!v.playerId;
 
@@ -561,26 +556,40 @@ return false;
 
 const p=players[v.playerId];
 
-const cd=
-customData[v.id]||{};
+const activity=
+playerActivity[v.playerId];
+
+const barb=
+barbInfo[v.id];
 
 if(
 cfg.filterInactive &&
-cd.status!=='inactive'
+activity &&
+activity.status!=='INACTIVE'
 ){
 return false;
 }
 
 if(
-cfg.filterNew &&
-cd.status!=='new'
+cfg.filterActive &&
+activity &&
+activity.status!=='ACTIVE'
 ){
 return false;
 }
 
 if(
-cfg.filterFarmed &&
-cd.status!=='farmed'
+cfg.filterFresh &&
+barb &&
+barb.status!=='FRESH'
+){
+return false;
+}
+
+if(
+cfg.filterOld &&
+barb &&
+barb.status!=='OLD'
 ){
 return false;
 }
@@ -592,11 +601,7 @@ v.name.toLowerCase().includes(search) ||
 (p&&p.name.toLowerCase().includes(search))
 );
 
-})
-
-.sort((a,b)=>a.distance-b.distance);
-
-renderTable();
+});
 
 }
 
@@ -606,11 +611,14 @@ renderTable();
 
 function renderTable(){
 
+const data=filtered();
+
 let html=`
 
 <table style="
 width:100%;
 border-collapse:collapse;
+font-size:11px;
 ">
 
 <tr style="
@@ -623,25 +631,22 @@ top:0;
 <th>COORD</th>
 <th>D</th>
 <th>PTS</th>
-<th>ALLY</th>
-<th>AI</th>
-<th>STATUS</th>
+<th>ACTIVITY</th>
+<th>BARB</th>
+<th>ACTIONS</th>
 
 </tr>
 `;
 
-currentData.forEach(v=>{
+data.forEach(v=>{
 
 const p=players[v.playerId];
 
-const ally=
-allies[p?.ally];
+const activity=
+playerActivity[v.playerId];
 
-const cd=
-customData[v.id]||{};
-
-const ai=
-p?inactiveScore(p):0;
+const barb=
+barbInfo[v.id];
 
 let bg='';
 
@@ -651,13 +656,19 @@ bg='rgba(120,120,120,.10)';
 
 }
 
-if(cd.status==='inactive'){
+if(
+activity &&
+activity.status==='INACTIVE'
+){
 
 bg='rgba(0,255,0,.12)';
 
 }
 
-if(cd.status==='farmed'){
+if(
+barb &&
+barb.status==='FRESH'
+){
 
 bg='rgba(255,255,0,.10)';
 
@@ -696,15 +707,52 @@ ${v.points}
 </td>
 
 <td>
-${ally?ally.tag:''}
+
+${
+activity
+?`
+${activity.status}<br>
+24h ${activity.day1}<br>
+48h ${activity.day2}<br>
+7d ${activity.week}
+`
+:''}
+
 </td>
 
 <td>
-${ai}
+
+${barb?barb.status:''}
+
 </td>
 
 <td>
-${cd.status||''}
+
+${
+p
+?`
+<button
+onclick="
+TWMPRO_CHECK_PLAYER(
+'${p.id}',
+'${p.name}'
+)
+">
+CHECK
+</button>
+`
+:`
+<button
+onclick="
+TWMPRO_CHECK_BARB(
+'${v.id}'
+)
+">
+SCAN BARB
+</button>
+`
+}
+
 </td>
 
 </tr>
@@ -724,39 +772,85 @@ document.querySelector('#tw_table')
 ========================================= */
 
 addListener(
-document.querySelector('#tw_update'),
+document.querySelector('#tw_scan'),
 'click',
-async()=>{
-
-await updateMap();
-
-scan();
-
-}
-);
-
-addListener(
-document.querySelector('#tw_auto'),
-'click',
-()=>{
-
-autoAnalyze();
-
-}
+loadMap
 );
 
 addListener(
 document.querySelector('#tw_search'),
 'input',
-scan
+renderTable
 );
 
 addListener(
-document.querySelector('#tw_close'),
-'click',
-()=>{
+document.querySelector('#tw_barbs'),
+'change',
+e=>{
 
-destroy();
+cfg.showBarbs=e.target.checked;
+save();
+renderTable();
+
+}
+);
+
+addListener(
+document.querySelector('#tw_players'),
+'change',
+e=>{
+
+cfg.showPlayers=e.target.checked;
+save();
+renderTable();
+
+}
+);
+
+addListener(
+document.querySelector('#tw_fresh'),
+'change',
+e=>{
+
+cfg.filterFresh=e.target.checked;
+save();
+renderTable();
+
+}
+);
+
+addListener(
+document.querySelector('#tw_old'),
+'change',
+e=>{
+
+cfg.filterOld=e.target.checked;
+save();
+renderTable();
+
+}
+);
+
+addListener(
+document.querySelector('#tw_inactive'),
+'change',
+e=>{
+
+cfg.filterInactive=e.target.checked;
+save();
+renderTable();
+
+}
+);
+
+addListener(
+document.querySelector('#tw_active'),
+'change',
+e=>{
+
+cfg.filterActive=e.target.checked;
+save();
+renderTable();
 
 }
 );
@@ -839,24 +933,25 @@ panel.remove();
 delete window.TWMPRO_RUNNING;
 delete window.TWMPRO_DESTROY;
 
+delete window.TWMPRO_CHECK_PLAYER;
+delete window.TWMPRO_CHECK_BARB;
+
 }
 
 window.TWMPRO_DESTROY=destroy;
+
+addListener(
+document.querySelector('#tw_close'),
+'click',
+destroy
+);
 
 /* =========================================
    INIT
 ========================================= */
 
-if(villages.length===0){
-
-await updateMap();
-
-}
-
-scan();
-
 setStatus(
-'Villages: '+currentData.length
+'Ready'
 );
 
 })();
