@@ -1,4 +1,5 @@
-(() => {
+(async()=>{
+
 'use strict';
 
 if(window.TWMPRO)return;
@@ -8,426 +9,422 @@ window.TWMPRO=true;
    CONFIG
 ========================================= */
 
-const STORAGE_KEY='TWMPRO_SETTINGS';
+const STORAGE='TWMPRO_SCANNER';
 
-const defaults={
-heatmap:true,
-hover:true,
-markers:true,
-panelX:20,
-panelY:120
+const cfg={
+radius:30
 };
 
-const cfg=load();
+/* =========================================
+   DATA
+========================================= */
+
+let villages=[];
+let players={};
+let allies={};
+let customData={};
+
+/* =========================================
+   LOAD SAVED
+========================================= */
+
+try{
+
+const saved=JSON.parse(
+localStorage.getItem(STORAGE)||'{}'
+);
+
+customData=saved.customData||{};
+
+}catch(e){}
+
+/* =========================================
+   UI
+========================================= */
+
+const panel=document.createElement('div');
+
+panel.style.position='fixed';
+panel.style.top='50px';
+panel.style.right='20px';
+panel.style.width='700px';
+panel.style.height='700px';
+panel.style.background='#202225';
+panel.style.color='white';
+panel.style.zIndex='999999';
+panel.style.padding='10px';
+panel.style.borderRadius='10px';
+panel.style.fontSize='12px';
+panel.style.overflow='hidden';
+panel.style.boxShadow='0 0 15px rgba(0,0,0,.5)';
+
+panel.innerHTML=`
+<div style="
+font-weight:bold;
+font-size:16px;
+margin-bottom:10px;
+">
+TWMPRO SCANNER
+</div>
+
+<div style="margin-bottom:10px">
+
+Radius:
+
+<input
+id="tw_radius"
+type="number"
+value="${cfg.radius}"
+style="
+width:60px;
+margin-right:10px;
+">
+
+<button id="tw_scan">
+SCAN
+</button>
+
+<input
+id="tw_search"
+placeholder="szukaj..."
+style="
+margin-left:10px;
+width:200px;
+">
+
+</div>
+
+<div
+id="tw_status"
+style="
+margin-bottom:10px;
+color:#00ff88;
+">
+READY
+</div>
+
+<div
+id="tw_table"
+style="
+height:600px;
+overflow:auto;
+border:1px solid #444;
+">
+</div>
+`;
+
+document.body.appendChild(panel);
 
 /* =========================================
    HELPERS
 ========================================= */
 
-function load(){
+function dist(x1,y1,x2,y2){
 
-try{
-return {
-...defaults,
-...JSON.parse(localStorage.getItem(STORAGE_KEY)||'{}')
-};
-}catch(e){
-return defaults;
+return Math.sqrt(
+Math.pow(x2-x1,2)+
+Math.pow(y2-y1,2)
+);
+
 }
+
+function currentCoord(){
+
+const coord=
+game_data.village.coord
+.split('|');
+
+return {
+x:+coord[0],
+y:+coord[1]
+};
 
 }
 
 function save(){
+
 localStorage.setItem(
-STORAGE_KEY,
-JSON.stringify(cfg)
-);
-}
-
-/* =========================================
-   MAP CHECK
-========================================= */
-
-if(!location.href.includes('screen=map')){
-alert('Otwórz mapę');
-return;
-}
-
-/* =========================================
-   CANVAS
-========================================= */
-
-const canvas=document.createElement('canvas');
-
-canvas.width=window.innerWidth;
-canvas.height=window.innerHeight;
-
-canvas.style.position='fixed';
-canvas.style.left='0';
-canvas.style.top='0';
-canvas.style.width='100vw';
-canvas.style.height='100vh';
-canvas.style.pointerEvents='none';
-canvas.style.zIndex='99998';
-
-document.body.appendChild(canvas);
-
-const ctx=canvas.getContext('2d');
-
-/* =========================================
-   RESIZE
-========================================= */
-
-function resize(){
-
-canvas.width=window.innerWidth;
-canvas.height=window.innerHeight;
-
-render();
-
-}
-
-window.addEventListener('resize',resize);
-
-/* =========================================
-   RENDER
-========================================= */
-
-function render(){
-
-ctx.clearRect(
-0,
-0,
-canvas.width,
-canvas.height
+STORAGE,
+JSON.stringify({
+customData
+})
 );
 
-if(cfg.heatmap){
-drawHeatmap();
 }
 
-if(cfg.markers){
-drawMarkers();
-}
+function setStatus(t){
+
+document.querySelector('#tw_status')
+.innerText=t;
 
 }
 
 /* =========================================
-   HEATMAP
+   DOWNLOAD MAP
 ========================================= */
 
-function drawHeatmap(){
+async function loadMapData(){
 
-for(let i=0;i<25;i++){
+setStatus('Pobieranie village.txt');
 
-const x=Math.random()*canvas.width;
-const y=Math.random()*canvas.height;
+const villagesTxt=
+await fetch('/map/village.txt')
+.then(r=>r.text());
 
-const danger=Math.random();
+setStatus('Pobieranie player.txt');
 
-let color='rgba(0,255,0,.15)';
+const playersTxt=
+await fetch('/map/player.txt')
+.then(r=>r.text());
 
-if(danger>.4){
-color='rgba(255,255,0,.15)';
-}
+setStatus('Pobieranie ally.txt');
 
-if(danger>.7){
-color='rgba(255,0,0,.18)';
-}
+const alliesTxt=
+await fetch('/map/ally.txt')
+.then(r=>r.text());
 
-ctx.beginPath();
+/* ======================
+   PARSE PLAYERS
+====================== */
 
-ctx.arc(
-x,
-y,
-60,
-0,
-Math.PI*2
+playersTxt
+.trim()
+.split('\n')
+.forEach(line=>{
+
+const p=line.split(',');
+
+players[p[0]]={
+id:p[0],
+name:p[1],
+ally:p[2],
+villages:p[3],
+points:p[4]
+};
+
+});
+
+/* ======================
+   PARSE ALLIES
+====================== */
+
+alliesTxt
+.trim()
+.split('\n')
+.forEach(line=>{
+
+const a=line.split(',');
+
+allies[a[0]]={
+id:a[0],
+name:a[1],
+tag:a[2]
+};
+
+});
+
+/* ======================
+   PARSE VILLAGES
+====================== */
+
+villages=[];
+
+villagesTxt
+.trim()
+.split('\n')
+.forEach(line=>{
+
+const v=line.split(',');
+
+villages.push({
+id:v[0],
+name:v[1],
+x:+v[2],
+y:+v[3],
+playerId:v[4],
+points:+v[5]
+});
+
+});
+
+setStatus(
+'Mapa załadowana: '+
+villages.length+
+' wiosek'
 );
 
-ctx.fillStyle=color;
-ctx.fill();
-
-}
-
 }
 
 /* =========================================
-   MARKERS
+   SCAN
 ========================================= */
 
-function drawMarkers(){
+function scan(){
 
-for(let i=0;i<40;i++){
+const c=currentCoord();
 
-const x=Math.random()*canvas.width;
-const y=Math.random()*canvas.height;
+const radius=
++document.querySelector('#tw_radius')
+.value;
 
-ctx.beginPath();
+const search=
+document.querySelector('#tw_search')
+.value
+.toLowerCase();
 
-ctx.arc(
-x,
-y,
-5,
-0,
-Math.PI*2
+const result=
+villages
+.map(v=>{
+
+v.distance=
+dist(
+c.x,
+c.y,
+v.x,
+v.y
 );
 
-ctx.fillStyle='#00bfff';
-ctx.fill();
+return v;
 
-}
+})
+.filter(v=>v.distance<=radius)
+.filter(v=>{
+
+if(!search)return true;
+
+const p=
+players[v.playerId];
+
+return (
+v.name.toLowerCase().includes(search) ||
+(p&&p.name.toLowerCase().includes(search))
+);
+
+})
+.sort((a,b)=>a.distance-b.distance);
+
+renderTable(result);
 
 }
 
 /* =========================================
-   PANEL
+   TABLE
 ========================================= */
 
-const panel=document.createElement('div');
+function renderTable(data){
 
-panel.innerHTML=`
-<div id="twmpro_header"
-style="
-font-weight:bold;
-margin-bottom:10px;
-cursor:move;
+let html=`
+<table style="
+width:100%;
+border-collapse:collapse;
 ">
-TWMPRO MAP v2
-</div>
 
-<label style="display:block;margin-bottom:8px">
-<input type="checkbox"
-id="tw_heatmap">
-
-Heatmap
-</label>
-
-<label style="display:block;margin-bottom:8px">
-<input type="checkbox"
-id="tw_markers">
-
-Village markers
-</label>
-
-<label style="display:block;margin-bottom:8px">
-<input type="checkbox"
-id="tw_hover">
-
-Hover intel
-</label>
-
-<div style="
-margin-top:10px;
-font-size:11px;
-opacity:.7;
+<tr style="
+background:#111;
+position:sticky;
+top:0;
 ">
-ALT+H Heatmap<br>
-ALT+M Markers
-</div>
+
+<th>Player</th>
+<th>Coord</th>
+<th>Dist</th>
+<th>Points</th>
+<th>Status</th>
+<th>Action</th>
+
+</tr>
 `;
 
-panel.style.position='fixed';
-panel.style.left=cfg.panelX+'px';
-panel.style.top=cfg.panelY+'px';
-panel.style.width='200px';
-panel.style.background='#202225';
-panel.style.color='white';
-panel.style.padding='12px';
-panel.style.borderRadius='10px';
-panel.style.fontSize='13px';
-panel.style.zIndex='999999';
-panel.style.boxShadow='0 0 12px rgba(0,0,0,.5)';
+data.forEach(v=>{
 
-document.body.appendChild(panel);
+const p=players[v.playerId];
+
+const cd=
+customData[v.id]||{};
+
+html+=`
+<tr style="
+border-bottom:1px solid #333;
+">
+
+<td>
+${p?p.name:'BARB'}
+</td>
+
+<td>
+${v.x}|${v.y}
+</td>
+
+<td>
+${v.distance.toFixed(2)}
+</td>
+
+<td>
+${v.points}
+</td>
+
+<td>
+${cd.attacked?'✔ FARMED':''}
+</td>
+
+<td>
+
+<button
+onclick="
+TWMPRO_MARK('${v.id}')
+">
+MARK
+</button>
+
+</td>
+
+</tr>
+`;
+
+});
+
+html+=`</table>`;
+
+document.querySelector('#tw_table')
+.innerHTML=html;
+
+}
 
 /* =========================================
-   UI INIT
+   GLOBAL MARK
 ========================================= */
 
-document.querySelector('#tw_heatmap')
-.checked=cfg.heatmap;
+window.TWMPRO_MARK=id=>{
 
-document.querySelector('#tw_markers')
-.checked=cfg.markers;
+if(!customData[id]){
+customData[id]={};
+}
 
-document.querySelector('#tw_hover')
-.checked=cfg.hover;
+customData[id].attacked=
+!customData[id].attacked;
+
+save();
+
+scan();
+
+};
 
 /* =========================================
    EVENTS
 ========================================= */
 
-document.querySelector('#tw_heatmap')
-.addEventListener('change',e=>{
+document.querySelector('#tw_scan')
+.onclick=scan;
 
-cfg.heatmap=e.target.checked;
-
-save();
-render();
-
-});
-
-document.querySelector('#tw_markers')
-.addEventListener('change',e=>{
-
-cfg.markers=e.target.checked;
-
-save();
-render();
-
-});
-
-document.querySelector('#tw_hover')
-.addEventListener('change',e=>{
-
-cfg.hover=e.target.checked;
-
-save();
-
-});
+document.querySelector('#tw_search')
+.oninput=scan;
 
 /* =========================================
-   HOTKEYS
+   INIT
 ========================================= */
 
-document.addEventListener('keydown',e=>{
+await loadMapData();
 
-if(e.altKey&&e.key==='h'){
-
-cfg.heatmap=!cfg.heatmap;
-
-document.querySelector('#tw_heatmap')
-.checked=cfg.heatmap;
-
-save();
-render();
-
-}
-
-if(e.altKey&&e.key==='m'){
-
-cfg.markers=!cfg.markers;
-
-document.querySelector('#tw_markers')
-.checked=cfg.markers;
-
-save();
-render();
-
-}
-
-});
-
-/* =========================================
-   DRAG PANEL
-========================================= */
-
-const header=
-document.querySelector('#twmpro_header');
-
-let drag=false;
-let offsetX=0;
-let offsetY=0;
-
-header.addEventListener('mousedown',e=>{
-
-drag=true;
-
-offsetX=
-e.clientX-panel.offsetLeft;
-
-offsetY=
-e.clientY-panel.offsetTop;
-
-});
-
-document.addEventListener('mouseup',()=>{
-
-drag=false;
-
-save();
-
-});
-
-document.addEventListener('mousemove',e=>{
-
-if(!drag)return;
-
-panel.style.left=
-e.clientX-offsetX+'px';
-
-panel.style.top=
-e.clientY-offsetY+'px';
-
-cfg.panelX=parseInt(panel.style.left);
-cfg.panelY=parseInt(panel.style.top);
-
-});
-
-/* =========================================
-   TOOLTIP
-========================================= */
-
-if(cfg.hover){
-
-const tip=document.createElement('div');
-
-tip.style.position='fixed';
-tip.style.background='rgba(0,0,0,.9)';
-tip.style.color='white';
-tip.style.padding='6px';
-tip.style.borderRadius='6px';
-tip.style.fontSize='12px';
-tip.style.pointerEvents='none';
-tip.style.zIndex='999999';
-
-document.body.appendChild(tip);
-
-document.addEventListener('mousemove',e=>{
-
-tip.style.left=e.clientX+15+'px';
-tip.style.top=e.clientY+15+'px';
-
-tip.innerHTML=`
-MAP PRO ACTIVE<br>
-X: ${e.clientX}<br>
-Y: ${e.clientY}
-`;
-
-});
-
-}
-
-/* =========================================
-   MESSAGE
-========================================= */
-
-function msg(t){
-
-const d=document.createElement('div');
-
-d.innerText=t;
-
-d.style.position='fixed';
-d.style.bottom='20px';
-d.style.right='20px';
-d.style.background='#111';
-d.style.color='white';
-d.style.padding='10px';
-d.style.borderRadius='8px';
-d.style.zIndex='999999';
-
-document.body.appendChild(d);
-
-setTimeout(()=>{
-d.remove();
-},2500);
-
-}
-
-render();
-
-msg('TWMPRO v2 aktywny');
+scan();
 
 })();
