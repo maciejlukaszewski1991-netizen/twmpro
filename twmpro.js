@@ -4,6 +4,10 @@
 if(window.TWMPRO)return;
 window.TWMPRO=true;
 
+/* =========================
+   CONFIG
+========================= */
+
 const cfg={
 range:true,
 hover:true,
@@ -21,45 +25,86 @@ spy:9,
 snob:35
 };
 
-const map=document.querySelector('#map_canvas');
+/* =========================
+   MAP CHECK
+========================= */
 
-if(!map){
+if(!location.href.includes('screen=map')){
 alert('Otwórz mapę');
 return;
 }
 
+/* =========================
+   FIND MAP
+========================= */
+
+function getMapElement(){
+
+return (
+document.querySelector('#map_container') ||
+document.querySelector('#map') ||
+document.querySelector('#map_canvas') ||
+document.querySelector('.map_container') ||
+document.querySelector('#fullscreenmap')
+);
+
+}
+
+const mapEl=getMapElement();
+
+if(!mapEl){
+alert('Nie znaleziono mapy');
+return;
+}
+
+/* =========================
+   CANVAS
+========================= */
+
 const canvas=document.createElement('canvas');
-canvas.width=map.width;
-canvas.height=map.height;
 
 canvas.style.position='absolute';
 canvas.style.left='0';
 canvas.style.top='0';
 canvas.style.pointerEvents='none';
-canvas.style.zIndex='50';
+canvas.style.zIndex='999';
 
-map.parentNode.appendChild(canvas);
+document.body.appendChild(canvas);
 
 const ctx=canvas.getContext('2d');
 
-function render(){
+/* =========================
+   UPDATE CANVAS POSITION
+========================= */
 
-ctx.clearRect(0,0,canvas.width,canvas.height);
+function updateCanvas(){
 
-if(cfg.range){
-drawRanges();
+const rect=mapEl.getBoundingClientRect();
+
+canvas.width=rect.width;
+canvas.height=rect.height;
+
+canvas.style.left=rect.left+'px';
+canvas.style.top=rect.top+'px';
+
+render();
+
 }
 
-}
+/* =========================
+   RANGE DRAW
+========================= */
 
 function drawRanges(){
 
-const x=canvas.width/2;
-const y=canvas.height/2;
+const rect=mapEl.getBoundingClientRect();
+
+const x=rect.width/2;
+const y=rect.height/2;
 
 cfg.hours.forEach(h=>{
 
-const r=(h*60/speed[cfg.unit])*12;
+const r=(h*60/speed[cfg.unit])*14;
 
 ctx.beginPath();
 ctx.arc(x,y,r,0,Math.PI*2);
@@ -76,6 +121,24 @@ ctx.fillText(h+'h',x+r+5,y);
 
 }
 
+/* =========================
+   RENDER
+========================= */
+
+function render(){
+
+ctx.clearRect(0,0,canvas.width,canvas.height);
+
+if(cfg.range){
+drawRanges();
+}
+
+}
+
+/* =========================
+   PANEL
+========================= */
+
 const panel=document.createElement('div');
 
 panel.innerHTML=`
@@ -85,14 +148,21 @@ MAP PRO
 
 <label style="display:block;margin-bottom:6px">
 <input type="checkbox" id="tw_range" checked>
-Range
+Range circles
 </label>
 
-<select id="tw_unit" style="width:100%">
+<div style="margin-top:8px">
+Jednostka:
+</div>
+
+<select id="tw_unit"
+style="width:100%;margin-top:4px">
+
 <option value="light">LK</option>
 <option value="spy">Zwiad</option>
 <option value="axe">Topór</option>
 <option value="snob">Szlachcic</option>
+
 </select>
 `;
 
@@ -104,11 +174,15 @@ panel.style.color='white';
 panel.style.padding='12px';
 panel.style.zIndex='999999';
 panel.style.borderRadius='10px';
-panel.style.width='160px';
+panel.style.width='180px';
 panel.style.fontSize='13px';
 panel.style.boxShadow='0 0 10px rgba(0,0,0,.5)';
 
 document.body.appendChild(panel);
+
+/* =========================
+   EVENTS
+========================= */
 
 document.querySelector('#tw_range')
 .addEventListener('change',e=>{
@@ -126,12 +200,16 @@ render();
 
 });
 
+/* =========================
+   TOOLTIP
+========================= */
+
 if(cfg.hover){
 
 const tip=document.createElement('div');
 
 tip.style.position='fixed';
-tip.style.background='black';
+tip.style.background='rgba(0,0,0,.9)';
 tip.style.color='white';
 tip.style.padding='6px';
 tip.style.borderRadius='6px';
@@ -147,31 +225,29 @@ tip.style.left=e.clientX+15+'px';
 tip.style.top=e.clientY+15+'px';
 
 tip.innerHTML=`
-Bieżąca jednostka: ${cfg.unit}<br>
-Zasięg: ${cfg.hours.join(', ')}h
+Jednostka: ${cfg.unit}<br>
+Zasięgi: ${cfg.hours.join(', ')}h
 `;
 
 });
 
 }
 
-render();
+/* =========================
+   OBSERVERS
+========================= */
 
-UI.InfoMessage('TWMPRO aktywny');
+window.addEventListener('resize',updateCanvas);
 
-const style=document.createElement('style');
+window.addEventListener('scroll',updateCanvas);
 
-style.innerHTML=`
-#map_canvas{
-position:relative;
-}
-`;
+setInterval(updateCanvas,500);
 
-document.head.appendChild(style);
+/* =========================
+   MESSAGE
+========================= */
 
-const UI={
-
-InfoMessage(t){
+function message(t){
 
 const d=document.createElement('div');
 
@@ -192,6 +268,8 @@ setTimeout(()=>d.remove(),3000);
 
 }
 
-};
+updateCanvas();
+
+message('TWMPRO aktywny');
 
 })();
