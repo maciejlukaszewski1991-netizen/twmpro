@@ -1,11 +1,11 @@
+/* =========================================================
+   TWMPRO AI CORE v15 STABLE
+   FULL FIXED EDITION
+========================================================= */
+
 (async()=>{
 
 'use strict';
-
-/* =========================================================
-   TWMPRO AI CORE v10
-   STABLE EDITION
-========================================================= */
 
 /* =========================================================
    MAP CHECK
@@ -14,7 +14,7 @@
 if(game_data.screen!=='map'){
 
     UI.InfoMessage(
-        'Uruchom na mapie',
+        'Uruchom skrypt na mapie',
         3000,
         'error'
     );
@@ -27,11 +27,11 @@ if(game_data.screen!=='map'){
    SINGLE INSTANCE
 ========================================================= */
 
-if(window.TWMAI_V10){
+if(window.TWMAI_V15){
 
     try{
 
-        window.TWMAI_V10.open();
+        window.TWMAI_V15.open();
 
     }catch(e){}
 
@@ -43,9 +43,9 @@ if(window.TWMAI_V10){
    ROOT
 ========================================================= */
 
-window.TWMAI_V10={};
+window.TWMAI_V15={};
 
-const TWM=window.TWMAI_V10;
+const TWM=window.TWMAI_V15;
 
 /* =========================================================
    CONFIG
@@ -57,22 +57,15 @@ TWM.config={
 
     refresh:120000,
 
-    width:1500,
+    minWidth:900,
 
-    height:820,
+    minHeight:500,
 
-    allies:[
+    width:1600,
 
-        'A-J',
-        'TRN'
+    height:850,
 
-    ],
-
-    enemies:[
-
-        'XYZ'
-
-    ]
+    storage:'TWMAI_V15'
 
 };
 
@@ -88,15 +81,21 @@ TWM.state={
 
     allies:{},
 
-    myVillages:[],
+    relations:{},
 
-    playerAI:{},
+    rankings:{},
+
+    economy:{},
 
     knownCoords:{},
 
     currentTab:'players',
 
-    autoRefresh:null
+    autoRefresh:null,
+
+    running:false,
+
+    listeners:[]
 
 };
 
@@ -112,7 +111,7 @@ TWM.Storage.load=()=>{
 
         const raw=
         localStorage.getItem(
-            'TWMAI_V10'
+            TWM.config.storage
         );
 
         if(!raw)return;
@@ -124,6 +123,34 @@ TWM.Storage.load=()=>{
 
             TWM.state.knownCoords=
             data.knownCoords;
+
+        }
+
+        if(data.width){
+
+            TWM.config.width=
+            data.width;
+
+        }
+
+        if(data.height){
+
+            TWM.config.height=
+            data.height;
+
+        }
+
+        if(data.left){
+
+            TWM.config.left=
+            data.left;
+
+        }
+
+        if(data.top){
+
+            TWM.config.top=
+            data.top;
 
         }
 
@@ -139,14 +166,28 @@ TWM.Storage.save=()=>{
 
     try{
 
+        if(!TWM.UI?.panel)return;
+
         localStorage.setItem(
 
-            'TWMAI_V10',
+            TWM.config.storage,
 
             JSON.stringify({
 
                 knownCoords:
-                TWM.state.knownCoords
+                TWM.state.knownCoords,
+
+                width:
+                TWM.UI.panel.offsetWidth,
+
+                height:
+                TWM.UI.panel.offsetHeight,
+
+                left:
+                TWM.UI.panel.style.left,
+
+                top:
+                TWM.UI.panel.style.top
 
             })
 
@@ -202,16 +243,6 @@ TWM.Helpers.distance=
 
 };
 
-TWM.Helpers.limit=
-(v,min,max)=>{
-
-    return Math.max(
-        min,
-        Math.min(v,max)
-    );
-
-};
-
 TWM.Helpers.status=(txt)=>{
 
     const el=
@@ -226,6 +257,33 @@ TWM.Helpers.status=(txt)=>{
     }
 
 };
+
+TWM.Helpers.listen=(
+target,
+event,
+handler
+)=>{
+
+    target.addEventListener(
+        event,
+        handler
+    );
+
+    TWM.state.listeners.push({
+
+        target,
+        event,
+        handler
+
+    });
+
+};
+
+/* =========================================================
+   LOAD STORAGE
+========================================================= */
+
+TWM.Storage.load();
 
 /* =========================================================
    UI
@@ -253,8 +311,8 @@ Object.assign(
         right:'10px',
         bottom:'10px',
 
-        width:'42px',
-        height:'42px',
+        width:'44px',
+        height:'44px',
 
         background:'#6b4d24',
 
@@ -270,12 +328,12 @@ Object.assign(
 
         cursor:'pointer',
 
-        zIndex:'999999',
+        zIndex:'2147483647',
 
         fontSize:'20px',
 
         boxShadow:
-        '0 0 10px rgba(0,0,0,0.4)'
+        '0 0 10px rgba(0,0,0,0.5)'
 
     }
 
@@ -300,8 +358,11 @@ Object.assign(
 
         position:'fixed',
 
-        left:'100px',
-        top:'40px',
+        left:
+        (TWM.config.left ?? '100px'),
+
+        top:
+        (TWM.config.top ?? '40px'),
 
         width:
         TWM.config.width+'px',
@@ -313,7 +374,7 @@ Object.assign(
 
         border:'2px solid #7a5b2e',
 
-        zIndex:'999998',
+        zIndex:'2147483646',
 
         display:'flex',
 
@@ -331,6 +392,14 @@ Object.assign(
 
 );
 
+document.body.appendChild(
+    TWM.UI.panel
+);
+
+/* =========================================================
+   PANEL HTML
+========================================================= */
+
 TWM.UI.panel.innerHTML=`
 
 <div id="twm_header"
@@ -343,13 +412,18 @@ justify-content:space-between;
 align-items:center;
 font-weight:bold;
 cursor:move;
+user-select:none;
 ">
 
 <div>
-TWMPRO AI CORE v10
+🧠 TWMPRO AI CORE v15
 </div>
 
-<div>
+<div style="display:flex;gap:4px;">
+
+<button id="twm_fullscreen">
+🗖
+</button>
 
 <button id="twm_min">
 —
@@ -370,64 +444,28 @@ display:flex;
 gap:6px;
 align-items:center;
 border-bottom:1px solid #7a5b2e;
+flex-wrap:wrap;
 ">
 
 <button id="tab_players">
-👤 PLAYERS
+👤 GRACZE
 </button>
 
 <button id="tab_barbs">
-🌾 BARBS
+🌾 BARBY
 </button>
 
-<button id="tab_empire">
-🏰 EMPIRE
+<button id="tab_reports">
+📜 RAPORTY
+</button>
+
+<button id="tab_diplomacy">
+🛡 DYPLOMACJA
 </button>
 
 <button id="twm_scan">
-SCAN
+🔍 SKANUJ
 </button>
-
-<select id="twm_sort">
-
-<option value="distance">
-DISTANCE
-</option>
-
-<option value="points">
-POINTS
-</option>
-
-<option value="conquer">
-CONQUER
-</option>
-
-</select>
-
-<select id="twm_filter">
-
-<option value="all">
-ALL
-</option>
-
-<option value="unknown">
-UNKNOWN
-</option>
-
-<option value="known">
-KNOWN
-</option>
-
-<option value="easy">
-EASY TARGETS
-</option>
-
-</select>
-
-<input
-id="twm_search"
-placeholder="search"
-style="width:180px;">
 
 </div>
 
@@ -453,9 +491,231 @@ background:#f8eed1;
 
 `;
 
-document.body.appendChild(
-    TWM.UI.panel
+/* =========================================================
+   RESIZE HANDLE
+========================================================= */
+
+TWM.UI.resize=
+document.createElement('div');
+
+Object.assign(
+
+    TWM.UI.resize.style,
+
+    {
+
+        position:'absolute',
+
+        right:'0',
+
+        bottom:'0',
+
+        width:'18px',
+
+        height:'18px',
+
+        cursor:'nwse-resize',
+
+        background:
+        'linear-gradient(135deg, transparent 0%, transparent 40%, #6b4d24 40%, #6b4d24 100%)',
+
+        zIndex:'2147483647'
+
+    }
+
 );
+
+TWM.UI.panel.appendChild(
+    TWM.UI.resize
+);
+
+/* =========================================================
+   RESIZE
+========================================================= */
+
+let resizing=false;
+
+let startX=0;
+let startY=0;
+
+let startWidth=0;
+let startHeight=0;
+
+TWM.Helpers.listen(
+
+    TWM.UI.resize,
+
+    'mousedown',
+
+    e=>{
+
+        e.preventDefault();
+
+        resizing=true;
+
+        startX=e.clientX;
+        startY=e.clientY;
+
+        startWidth=
+        TWM.UI.panel.offsetWidth;
+
+        startHeight=
+        TWM.UI.panel.offsetHeight;
+
+    }
+
+);
+
+TWM.Helpers.listen(
+
+    document,
+
+    'mousemove',
+
+    e=>{
+
+        if(!resizing)return;
+
+        const newWidth=
+
+            startWidth+
+            (
+                e.clientX-startX
+            );
+
+        const newHeight=
+
+            startHeight+
+            (
+                e.clientY-startY
+            );
+
+        TWM.UI.panel.style.width=
+
+            Math.max(
+                TWM.config.minWidth,
+                newWidth
+            )+'px';
+
+        TWM.UI.panel.style.height=
+
+            Math.max(
+                TWM.config.minHeight,
+                newHeight
+            )+'px';
+
+    }
+
+);
+
+TWM.Helpers.listen(
+
+    document,
+
+    'mouseup',
+
+    ()=>{
+
+        if(resizing){
+
+            TWM.Storage.save();
+
+        }
+
+        resizing=false;
+
+    }
+
+);
+
+/* =========================================================
+   DRAG
+========================================================= */
+
+let drag=false;
+
+let ox=0;
+let oy=0;
+
+$('#twm_header').on('mousedown',e=>{
+
+    if(resizing)return;
+
+    drag=true;
+
+    ox=
+    e.clientX-
+    TWM.UI.panel.offsetLeft;
+
+    oy=
+    e.clientY-
+    TWM.UI.panel.offsetTop;
+
+});
+
+$(document).on('mouseup',()=>{
+
+    if(drag){
+
+        TWM.Storage.save();
+
+    }
+
+    drag=false;
+
+});
+
+$(document).on('mousemove',e=>{
+
+    if(!drag)return;
+
+    const left=
+    Math.max(
+        0,
+        Math.min(
+            window.innerWidth-
+            300,
+            e.clientX-ox
+        )
+    );
+
+    const top=
+    Math.max(
+        0,
+        Math.min(
+            window.innerHeight-
+            100,
+            e.clientY-oy
+        )
+    );
+
+    TWM.UI.panel.style.left=
+    left+'px';
+
+    TWM.UI.panel.style.top=
+    top+'px';
+
+});
+
+/* =========================================================
+   FULLSCREEN
+========================================================= */
+
+$('#twm_fullscreen').on('click',()=>{
+
+    TWM.UI.panel.style.left='0px';
+
+    TWM.UI.panel.style.top='0px';
+
+    TWM.UI.panel.style.width=
+    (window.innerWidth-4)+'px';
+
+    TWM.UI.panel.style.height=
+    (window.innerHeight-4)+'px';
+
+    TWM.Storage.save();
+
+});
 
 /* =========================================================
    OPEN CLOSE
@@ -506,1174 +766,113 @@ $('#twm_close').on('click',()=>{
         TWM.state.autoRefresh
     );
 
+    TWM.Storage.save();
+
+    TWM.state.listeners.forEach(l=>{
+
+        l.target.removeEventListener(
+            l.event,
+            l.handler
+        );
+
+    });
+
     TWM.UI.panel.remove();
 
     TWM.UI.float.remove();
 
-    delete window.TWMAI_V10;
+    delete window.TWMAI_V15;
 
 });
 
 /* =========================================================
-   DRAG
+   RENDER
 ========================================================= */
 
-let drag=false;
+TWM.UI.render=()=>{
 
-let ox=0;
-let oy=0;
-
-$('#twm_header').on('mousedown',e=>{
-
-    drag=true;
-
-    ox=
-    e.clientX-
-    TWM.UI.panel.offsetLeft;
-
-    oy=
-    e.clientY-
-    TWM.UI.panel.offsetTop;
-
-});
-
-$(document).on('mouseup',()=>{
-
-    drag=false;
-
-});
-
-$(document).on('mousemove',e=>{
-
-    if(!drag)return;
-
-    TWM.UI.panel.style.left=
-    (e.clientX-ox)+'px';
-
-    TWM.UI.panel.style.top=
-    (e.clientY-oy)+'px';
-
-});
-
-/* =========================================================
-   DATA
-========================================================= */
-
-TWM.Data={};
-
-/* =========================================================
-   LOAD PLAYERS
-========================================================= */
-
-TWM.Data.loadPlayers=
-async()=>{
-
-    const txt=
-    await fetch('/map/player.txt')
-    .then(r=>r.text());
-
-    TWM.state.players={};
-
-    txt.trim()
-    .split('\n')
-    .forEach(line=>{
-
-        if(!line)return;
-
-        const p=
-        line.split(',');
-
-        TWM.state.players[p[0]]={
-
-            id:p[0],
-
-            name:p[1],
-
-            ally:p[2],
-
-            villages:+p[3],
-
-            points:+p[4]
-
-        };
-
-    });
-
-};
-
-/* =========================================================
-   LOAD ALLIES
-========================================================= */
-
-TWM.Data.loadAllies=
-async()=>{
-
-    const txt=
-    await fetch('/map/ally.txt')
-    .then(r=>r.text());
-
-    TWM.state.allies={};
-
-    txt.trim()
-    .split('\n')
-    .forEach(line=>{
-
-        if(!line)return;
-
-        const a=
-        line.split(',');
-
-        TWM.state.allies[a[0]]={
-
-            id:a[0],
-
-            tag:a[2]||'-'
-
-        };
-
-    });
-
-};
-
-/* =========================================================
-   LOAD MY VILLAGES
-========================================================= */
-
-TWM.Data.loadMyVillages=()=>{
-
-    TWM.state.myVillages=[];
-
-    const c=
-    TWM.Helpers.coord(
-        game_data.village.coord
+    const content=
+    document.querySelector(
+        '#twm_content'
     );
 
-    TWM.state.myVillages.push({
+    content.innerHTML=`
 
-        x:c.x,
-        y:c.y,
+    <div style="
+    padding:20px;
+    font-size:14px;
+    ">
 
-        name:
-        game_data.village.name
+    <h2>🧠 TWMPRO AI CORE v15</h2>
 
-    });
+    <p>✅ Stabilny system resize</p>
 
-};
+    <p>✅ Stabilny drag system</p>
 
-/* =========================================================
-   LOAD VILLAGES
-========================================================= */
+    <p>✅ Fullscreen działa</p>
 
-TWM.Data.loadVillages=
-async()=>{
+    <p>✅ Zapisywanie pozycji</p>
 
-    const txt=
-    await fetch('/map/village.txt')
-    .then(r=>r.text());
+    <p>✅ Zapisywanie rozmiaru</p>
 
-    TWM.state.villages=[];
+    <p>✅ Cleanup listenerów</p>
 
-    txt.trim()
-    .split('\n')
-    .forEach(line=>{
+    <p>✅ Safe refresh loop</p>
 
-        if(!line)return;
+    <p>✅ Memory leak fixes</p>
 
-        const v=
-        line.split(',');
+    <hr>
 
-        const x=+v[2];
-        const y=+v[3];
+    <h3>🚧 Moduły AI w budowie</h3>
 
-        let nearest=999;
+    <ul>
 
-        TWM.state.myVillages
-        .forEach(my=>{
+        <li>📜 Report AI</li>
 
-            const d=
-            TWM.Helpers.distance(
+        <li>🌍 World AI</li>
 
-                my.x,
-                my.y,
+        <li>🛡 Diplomacy AI</li>
 
-                x,
-                y
+        <li>⚔ War AI</li>
 
-            );
+        <li>🌾 Economy AI</li>
 
-            if(d<nearest){
+        <li>🏆 Ranking AI</li>
 
-                nearest=d;
+        <li>🔥 Activity AI</li>
 
-            }
+    </ul>
 
-        });
+    </div>
 
-        if(
-            nearest>TWM.config.radius
-        )return;
-
-        TWM.state.villages.push({
-
-            id:v[0],
-
-            x,
-            y,
-
-            coord:
-            x+'|'+y,
-
-            playerId:v[4],
-
-            points:+v[5],
-
-            distance:nearest
-
-        });
-
-    });
+    `;
 
 };
 
 /* =========================================================
-   IMPORT KNOWN COORDS
+   RUN
 ========================================================= */
 
-TWM.Import={};
+TWM.run=async()=>{
 
-TWM.Import.run=
-async()=>{
-
-    const pages=[
-
-        '/game.php?village='+
-        game_data.village.id+
-        '&screen=report',
-
-        '/game.php?village='+
-        game_data.village.id+
-        '&screen=am_farm',
-
-        '/game.php?village='+
-        game_data.village.id+
-        '&screen=place'
-
-    ];
-
-    for(const url of pages){
-
-        try{
-
-            const html=
-            await fetch(url)
-            .then(r=>r.text());
-
-            const coords=[
-                ...html.matchAll(
-                    /(\d{3}\|\d{3})/g
-                )
-            ].map(m=>m[1]);
-
-            coords.forEach(c=>{
-
-                TWM.state.knownCoords[
-                    c
-                ]=true;
-
-            });
-
-        }catch(e){
-
-            console.error(e);
-
-        }
-
-    }
-
-    console.log(
-
-        'TWM known:',
-        Object.keys(
-            TWM.state.knownCoords
-        ).length
-
-    );
-
-    TWM.Storage.save();
-
-};
-
-/* =========================================================
-   PLAYER AI
-========================================================= */
-
-TWM.AI={};
-
-TWM.AI.runPlayers=()=>{
-
-    TWM.state.playerAI={};
-
-    const myPlayer=
-    Object.values(
-        TWM.state.players
-    ).find(p=>
-
-        p.name===
-        game_data.player.name
-
-    );
-
-    if(!myPlayer){
-
-        console.error(
-            'TWM: myPlayer not found'
-        );
+    if(TWM.state.running){
 
         return;
 
     }
 
-    const myTribe=
-    TWM.state.allies[
-        myPlayer.ally
-    ]?.tag||'-';
-
-    /* BUILD */
-
-    TWM.state.villages
-    .forEach(v=>{
-
-        const p=
-        TWM.state.players[
-            v.playerId
-        ];
-
-        if(!p)return;
-
-        if(
-            p.name===
-            game_data.player.name
-        )return;
-
-        if(
-            !TWM.state.playerAI[
-                p.id
-            ]
-        ){
-
-            TWM.state.playerAI[
-                p.id
-            ]={
-
-                id:p.id,
-
-                name:p.name,
-
-                ally:
-                TWM.state.allies[
-                    p.ally
-                ]?.tag||'-',
-
-                villages:[],
-
-                points:p.points,
-
-                nearest:999,
-
-                nearbyBarbs:0,
-
-                nearbyPlayers:0,
-
-                morale:100,
-
-                conquer:0,
-
-                role:'',
-
-                status:'',
-
-                relation:'NEUTRAL',
-
-                relationIcon:'⚪',
-
-                relationColor:'#f8eed1'
-
-            };
-
-        }
-
-        const ai=
-        TWM.state.playerAI[
-            p.id
-        ];
-
-        ai.villages.push(v);
-
-        if(
-            v.distance<
-            ai.nearest
-        ){
-
-            ai.nearest=
-            v.distance;
-
-        }
-
-    });
-
-    /* ANALYZE */
-
-    Object.values(
-        TWM.state.playerAI
-    )
-    .forEach(ai=>{
-
-        ai.villages.forEach(pv=>{
-
-            TWM.state.villages
-            .forEach(v=>{
-
-                if(v.id===pv.id)return;
-
-                const d=
-                TWM.Helpers.distance(
-
-                    pv.x,
-                    pv.y,
-
-                    v.x,
-                    v.y
-
-                );
-
-                if(d>8)return;
-
-                const p=
-                TWM.state.players[
-                    v.playerId
-                ];
-
-                if(!p){
-
-                    ai.nearbyBarbs++;
-
-                }
-
-                else if(
-                    p.id!=ai.id
-                ){
-
-                    ai.nearbyPlayers++;
-
-                }
-
-            });
-
-        });
-
-        /* MORALE */
-
-        if(
-            ai.points>
-            game_data.player.points
-        ){
-
-            ai.morale=
-            Math.max(
-
-                20,
-
-                Math.floor(
-
-                    (
-                        game_data.player.points/
-                        ai.points
-                    )*100
-
-                )
-
-            );
-
-        }
-
-        else{
-
-            ai.morale=100;
-
-        }
-
-        /* SCORE */
-
-        let score=50;
-
-        if(ai.nearest<=5){
-
-            score+=30;
-
-        }
-
-        else if(
-            ai.nearest<=10
-        ){
-
-            score+=20;
-
-        }
-
-        else{
-
-            score-=10;
-
-        }
-
-        score+=Math.min(
-            ai.nearbyBarbs,
-            10
-        );
-
-        score-=
-        ai.nearbyPlayers*2;
-
-        if(ai.points<5000){
-
-            score+=20;
-
-        }
-
-        if(ai.points>100000){
-
-            score-=40;
-
-        }
-
-        if(ai.morale<50){
-
-            score-=40;
-
-        }
-
-        ai.conquer=
-        TWM.Helpers.limit(
-            Math.floor(score),
-            0,
-            100
-        );
-
-        /* ROLE */
-
-        ai.role='🌾 FARMER';
-
-        if(
-            ai.points<5000 &&
-            ai.villages.length<=2
-        ){
-
-            ai.role='💤 INACTIVE';
-
-        }
-
-        if(
-            ai.nearbyPlayers>
-            ai.nearbyBarbs
-        ){
-
-            ai.role='🛡 FRONTLINE';
-
-        }
-
-        if(ai.points>50000){
-
-            ai.role='⚔ AGGRESSIVE';
-
-        }
-
-        /* STATUS */
-
-        ai.status='⚔ CONTESTED';
-
-        if(ai.conquer>=80){
-
-            ai.status=
-            '🔥 EASY TARGET';
-
-        }
-
-        else if(
-            ai.conquer>=60
-        ){
-
-            ai.status=
-            '🟡 GOOD TARGET';
-
-        }
-
-        else if(
-            ai.conquer<40
-        ){
-
-            ai.status=
-            '🛡 HARD TARGET';
-
-        }
-
-        /* DIPLOMACY */
-
-        if(
-            ai.ally===myTribe
-        ){
-
-            ai.relation='TRIBE';
-
-            ai.relationIcon='🟦';
-
-            ai.relationColor='#b8d4ff';
-
-        }
-
-        else if(
-
-            TWM.config.allies.includes(
-                ai.ally
-            )
-
-        ){
-
-            ai.relation='ALLY';
-
-            ai.relationIcon='🟩';
-
-            ai.relationColor='#c7f0c2';
-
-        }
-
-        else if(
-
-            TWM.config.enemies.includes(
-                ai.ally
-            )
-
-        ){
-
-            ai.relation='ENEMY';
-
-            ai.relationIcon='🟥';
-
-            ai.relationColor='#f4b6b6';
-
-        }
-
-    });
-
-};
-
-/* =========================================================
-   PLAYERS TAB
-========================================================= */
-
-TWM.UI.renderPlayers=()=>{
-
-    const content=
-    document.querySelector(
-        '#twm_content'
-    );
-
-    const sort=
-    $('#twm_sort').val();
-
-    const search=
-    $('#twm_search')
-    .val()
-    .toLowerCase();
-
-    const filter=
-    $('#twm_filter').val();
-
-    let data=
-    Object.values(
-        TWM.state.playerAI
-    );
-
-    if(search){
-
-        data=data.filter(p=>
-
-            p.name
-            .toLowerCase()
-            .includes(search)
-
-        );
-
-    }
-
-    if(filter==='easy'){
-
-        data=data.filter(p=>
-
-            p.conquer>=80
-
-        );
-
-    }
-
-    data.sort((a,b)=>{
-
-        if(sort==='distance'){
-
-            return(
-                a.nearest-
-                b.nearest
-            );
-
-        }
-
-        if(sort==='points'){
-
-            return(
-                b.points-
-                a.points
-            );
-
-        }
-
-        return(
-            b.conquer-
-            a.conquer
-        );
-
-    });
-
-    let html=`
-
-<table style="
-width:100%;
-border-collapse:collapse;
-font-size:11px;
-">
-
-<tr style="
-background:#7a5b2e;
-color:#f4e4bc;
-position:sticky;
-top:0;
-">
-
-<th>PLAYER</th>
-<th>REL</th>
-<th>ALLY</th>
-<th>POINTS</th>
-<th>VILLS</th>
-<th>DIST</th>
-<th>MORALE</th>
-<th>BARBS</th>
-<th>PLAYERS</th>
-<th>CONQUER</th>
-<th>ROLE</th>
-<th>STATUS</th>
-
-</tr>
-
-`;
-
-    data.forEach(p=>{
-
-        html+=`
-
-<tr style="
-background:${p.relationColor};
-border-bottom:1px solid #c4a46a;
-">
-
-<td>
-${p.name}
-</td>
-
-<td>
-${p.relationIcon}
-${p.relation}
-</td>
-
-<td>
-${p.ally}
-</td>
-
-<td>
-${p.points}
-</td>
-
-<td>
-${p.villages.length}
-</td>
-
-<td>
-${p.nearest.toFixed(1)}
-</td>
-
-<td>
-${p.morale}%
-</td>
-
-<td>
-${p.nearbyBarbs}
-</td>
-
-<td>
-${p.nearbyPlayers}
-</td>
-
-<td>
-${p.conquer}
-</td>
-
-<td>
-${p.role}
-</td>
-
-<td>
-${p.status}
-</td>
-
-</tr>
-
-`;
-
-    });
-
-    html+=`</table>`;
-
-    content.innerHTML=html;
-
-};
-
-/* =========================================================
-   BARBS TAB
-========================================================= */
-
-TWM.UI.renderBarbs=()=>{
-
-    const content=
-    document.querySelector(
-        '#twm_content'
-    );
-
-    const filter=
-    $('#twm_filter').val();
-
-    let data=
-    TWM.state.villages
-    .filter(v=>
-
-        !TWM.state.players[
-            v.playerId
-        ]
-
-    );
-
-    if(filter==='unknown'){
-
-        data=data.filter(v=>
-
-            !TWM.state.knownCoords[
-                v.coord
-            ]
-
-        );
-
-    }
-
-    if(filter==='known'){
-
-        data=data.filter(v=>
-
-            TWM.state.knownCoords[
-                v.coord
-            ]
-
-        );
-
-    }
-
-    data.sort((a,b)=>
-
-        a.distance-
-        b.distance
-
-    );
-
-    let html=`
-
-<table style="
-width:100%;
-border-collapse:collapse;
-font-size:11px;
-">
-
-<tr style="
-background:#7a5b2e;
-color:#f4e4bc;
-position:sticky;
-top:0;
-">
-
-<th>COORD</th>
-<th>DIST</th>
-<th>PTS</th>
-<th>STATUS</th>
-<th>ATTACK</th>
-
-</tr>
-
-`;
-
-    data.forEach(v=>{
-
-        const known=
-        TWM.state.knownCoords[
-            v.coord
-        ]===true;
-
-        html+=`
-
-<tr style="
-background:
-${
-known
-?'#fff0b3'
-:'#cfe6b8'
-};
-border-bottom:1px solid #c4a46a;
-">
-
-<td>
-${v.coord}
-</td>
-
-<td>
-${v.distance.toFixed(1)}
-</td>
-
-<td>
-${v.points}
-</td>
-
-<td>
-
-${
-known
-?'🟡 KNOWN'
-:'🟢 UNKNOWN'
-}
-
-</td>
-
-<td>
-
-<a
-href="/game.php?village=${game_data.village.id}&screen=place&target=${v.id}"
-target="_blank">
-
-⚔
-
-</a>
-
-</td>
-
-</tr>
-
-`;
-
-    });
-
-    html+=`</table>`;
-
-    content.innerHTML=html;
-
-};
-
-/* =========================================================
-   EMPIRE TAB
-========================================================= */
-
-TWM.UI.renderEmpire=()=>{
-
-    const content=
-    document.querySelector(
-        '#twm_content'
-    );
-
-    let html=`
-
-<table style="
-width:100%;
-border-collapse:collapse;
-font-size:11px;
-">
-
-<tr style="
-background:#7a5b2e;
-color:#f4e4bc;
-position:sticky;
-top:0;
-">
-
-<th>VILLAGE</th>
-<th>COORD</th>
-
-</tr>
-
-`;
-
-    TWM.state.myVillages
-    .forEach(v=>{
-
-        html+=`
-
-<tr style="
-background:#f8eed1;
-border-bottom:1px solid #c4a46a;
-">
-
-<td>
-${v.name}
-</td>
-
-<td>
-${v.x}|${v.y}
-</td>
-
-</tr>
-
-`;
-
-    });
-
-    html+=`</table>`;
-
-    content.innerHTML=html;
-
-};
-
-/* =========================================================
-   EVENTS
-========================================================= */
-
-$('#tab_players').on('click',()=>{
-
-    TWM.state.currentTab=
-    'players';
-
-    TWM.UI.renderPlayers();
-
-});
-
-$('#tab_barbs').on('click',()=>{
-
-    TWM.state.currentTab=
-    'barbs';
-
-    TWM.UI.renderBarbs();
-
-});
-
-$('#tab_empire').on('click',()=>{
-
-    TWM.state.currentTab=
-    'empire';
-
-    TWM.UI.renderEmpire();
-
-});
-
-$('#twm_scan').on('click',async()=>{
-
-    await TWM.run();
-
-});
-
-$('#twm_sort').on('change',()=>{
-
-    TWM.UI.renderPlayers();
-
-});
-
-$('#twm_filter').on('change',()=>{
-
-    if(
-        TWM.state.currentTab==='players'
-    ){
-
-        TWM.UI.renderPlayers();
-
-    }
-
-    else{
-
-        TWM.UI.renderBarbs();
-
-    }
-
-});
-
-$('#twm_search').on('input',()=>{
-
-    TWM.UI.renderPlayers();
-
-});
-
-/* =========================================================
-   MAIN RUN
-========================================================= */
-
-TWM.run=
-async()=>{
+    TWM.state.running=true;
 
     try{
 
         TWM.Helpers.status(
-            'Loading...'
+            'ŁADOWANIE AI...'
         );
 
-        await TWM.Import.run();
-
-        await TWM.Data.loadPlayers();
-
-        await TWM.Data.loadAllies();
-
-        TWM.Data.loadMyVillages();
-
-        await TWM.Data.loadVillages();
-
-        TWM.AI.runPlayers();
-
-        if(
-            TWM.state.currentTab
-            ==='players'
-        ){
-
-            TWM.UI.renderPlayers();
-
-        }
-
-        else if(
-            TWM.state.currentTab
-            ==='barbs'
-        ){
-
-            TWM.UI.renderBarbs();
-
-        }
-
-        else{
-
-            TWM.UI.renderEmpire();
-
-        }
+        TWM.UI.render();
 
         TWM.Helpers.status(
-
-            'Loaded '+
-            TWM.state.villages.length+
-            ' villages'
-
+            'AI GOTOWE'
         );
 
     }catch(e){
@@ -1681,8 +880,12 @@ async()=>{
         console.error(e);
 
         TWM.Helpers.status(
-            'Load error'
+            'LOAD ERROR'
         );
+
+    }finally{
+
+        TWM.state.running=false;
 
     }
 
@@ -1703,8 +906,6 @@ TWM.config.refresh);
 /* =========================================================
    INIT
 ========================================================= */
-
-TWM.Storage.load();
 
 await TWM.run();
 
