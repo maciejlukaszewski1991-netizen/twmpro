@@ -3,16 +3,16 @@
 'use strict';
 
 /* =========================================
-   TWMPRO v11 STABLE
-   FULL REBUILD
+   TWMPRO v12 STABLE
+   VERIFIED BUILD
 ========================================= */
 
 /* =========================================
-   CLEAN PREVIOUS
+   CLEAN START
 ========================================= */
 
 if(window.TWMPRO_DESTROY){
-window.TWMPRO_DESTROY();
+    window.TWMPRO_DESTROY();
 }
 
 window.TWMPRO_RUNNING=true;
@@ -21,9 +21,9 @@ window.TWMPRO_RUNNING=true;
    STORAGE
 ========================================= */
 
-const STORAGE='TWMPRO_V11';
-const BARB_CACHE='TWMPRO_BARB_CACHE_V11';
-const PLAYER_HISTORY='TWMPRO_PLAYER_HISTORY_V11';
+const STORAGE='TWMPRO_V12';
+const BARB_CACHE='TWMPRO_BARB_CACHE_V12';
+const PLAYER_HISTORY='TWMPRO_PLAYER_HISTORY_V12';
 
 /* =========================================
    CONFIG
@@ -31,20 +31,21 @@ const PLAYER_HISTORY='TWMPRO_PLAYER_HISTORY_V11';
 
 const defaults={
 
-radius:25,
+    radius:25,
 
-panelX:80,
-panelY:40,
-panelW:1000,
-panelH:650,
+    panelX:80,
+    panelY:40,
 
-showBarbs:true,
-showPlayers:true,
+    panelW:1000,
+    panelH:650,
 
-showKnown:true,
-showUnknown:true,
+    showBarbs:true,
+    showPlayers:true,
 
-onlyUnknown:false
+    showKnown:true,
+    showUnknown:true,
+
+    onlyUnknown:false
 
 };
 
@@ -52,29 +53,29 @@ let cfg=loadConfig();
 
 function loadConfig(){
 
-try{
+    try{
 
-return{
-...defaults,
-...JSON.parse(
-localStorage.getItem(STORAGE)||'{}'
-)
-};
+        return{
+            ...defaults,
+            ...JSON.parse(
+                localStorage.getItem(STORAGE)||'{}'
+            )
+        };
 
-}catch(e){
+    }catch(e){
 
-return defaults;
+        return defaults;
 
-}
+    }
 
 }
 
 function saveConfig(){
 
-localStorage.setItem(
-STORAGE,
-JSON.stringify(cfg)
-);
+    localStorage.setItem(
+        STORAGE,
+        JSON.stringify(cfg)
+    );
 
 }
 
@@ -89,32 +90,31 @@ let allies={};
 let myAlly='';
 
 let barbCache={};
-
 let playerHistory={};
 
 try{
 
-barbCache=
-JSON.parse(
-localStorage.getItem(BARB_CACHE)||'{}'
-);
+    barbCache=
+    JSON.parse(
+        localStorage.getItem(BARB_CACHE)||'{}'
+    );
 
 }catch(e){
 
-barbCache={};
+    barbCache={};
 
 }
 
 try{
 
-playerHistory=
-JSON.parse(
-localStorage.getItem(PLAYER_HISTORY)||'{}'
-);
+    playerHistory=
+    JSON.parse(
+        localStorage.getItem(PLAYER_HISTORY)||'{}'
+    );
 
 }catch(e){
 
-playerHistory={};
+    playerHistory={};
 
 }
 
@@ -124,52 +124,51 @@ playerHistory={};
 
 function setStatus(txt){
 
-const el=
-document.querySelector('#tw_status');
+    const el=
+    document.querySelector('#tw_status');
 
-if(el){
-el.innerText=txt;
-}
-
-}
-
-function dist(x1,y1,x2,y2){
-
-return Math.sqrt(
-Math.pow(x2-x1,2)+
-Math.pow(y2-y1,2)
-);
-
-}
-
-function currentCoord(){
-
-const c=
-game_data.village.coord
-.split('|');
-
-return{
-x:+c[0],
-y:+c[1]
-};
+    if(el){
+        el.innerText=txt;
+    }
 
 }
 
 function saveBarbs(){
 
-localStorage.setItem(
-BARB_CACHE,
-JSON.stringify(barbCache)
-);
+    localStorage.setItem(
+        BARB_CACHE,
+        JSON.stringify(barbCache)
+    );
 
 }
 
 function saveHistory(){
 
-localStorage.setItem(
-PLAYER_HISTORY,
-JSON.stringify(playerHistory)
-);
+    localStorage.setItem(
+        PLAYER_HISTORY,
+        JSON.stringify(playerHistory)
+    );
+
+}
+
+function dist(x1,y1,x2,y2){
+
+    return Math.sqrt(
+        Math.pow(x2-x1,2)+
+        Math.pow(y2-y1,2)
+    );
+
+}
+
+function currentCoord(){
+
+    const c=
+    game_data.village.coord.split('|');
+
+    return{
+        x:+c[0],
+        y:+c[1]
+    };
 
 }
 
@@ -184,18 +183,26 @@ panel.id='twmpro_panel';
 panel.style.position='fixed';
 panel.style.left=cfg.panelX+'px';
 panel.style.top=cfg.panelY+'px';
+
 panel.style.width=cfg.panelW+'px';
 panel.style.height=cfg.panelH+'px';
+
 panel.style.background='#f4e4bc';
 panel.style.border='2px solid #7a5b2e';
+
 panel.style.zIndex='999999';
+
 panel.style.display='flex';
 panel.style.flexDirection='column';
+
 panel.style.resize='both';
 panel.style.overflow='hidden';
+
 panel.style.fontFamily='Verdana';
 panel.style.fontSize='11px';
+
 panel.style.borderRadius='8px';
+
 panel.style.boxShadow='0 0 12px rgba(0,0,0,.5)';
 
 panel.innerHTML=`
@@ -210,7 +217,7 @@ cursor:move;
 border-bottom:2px solid #3e2b14;
 ">
 
-TWMPRO v11 STABLE
+TWMPRO v12 STABLE
 
 </div>
 
@@ -317,301 +324,290 @@ document.body.appendChild(panel);
 
 async function loadMap(){
 
-try{
+    try{
 
-setStatus('Loading players');
+        setStatus('Loading players');
 
-const playerTxt=
-await fetch('/map/player.txt')
-.then(r=>r.text());
+        const playerTxt=
+        await fetch('/map/player.txt')
+        .then(r=>r.text());
 
-players={};
+        players={};
 
-playerTxt
-.trim()
-.split('\n')
-.forEach(line=>{
+        playerTxt
+        .trim()
+        .split('\n')
+        .forEach(line=>{
 
-if(!line)return;
+            if(!line)return;
 
-const p=line.split(',');
+            const p=line.split(',');
 
-players[p[0]]={
+            players[p[0]]={
 
-id:p[0],
-name:p[1],
-ally:p[2],
-villages:+p[3],
-points:+p[4]
+                id:p[0],
+                name:p[1],
+                ally:p[2],
 
-};
+                villages:+p[3],
+                points:+p[4]
 
-/* HISTORY */
+            };
 
-if(!playerHistory[p[0]]){
+            /* HISTORY */
 
-playerHistory[p[0]]=[];
+            if(!playerHistory[p[0]]){
 
-}
+                playerHistory[p[0]]=[];
 
-playerHistory[p[0]].push({
+            }
 
-time:Date.now(),
-points:+p[4]
+            playerHistory[p[0]].push({
 
-});
+                time:Date.now(),
+                points:+p[4]
 
-/* LIMIT */
+            });
 
-if(playerHistory[p[0]].length>30){
+            if(
+                playerHistory[p[0]].length>30
+            ){
 
-playerHistory[p[0]].shift();
+                playerHistory[p[0]].shift();
 
-}
+            }
 
-});
+        });
 
-saveHistory();
+        saveHistory();
 
-/* MY ALLY */
+        /* MY ALLY */
 
-const me=
-players[game_data.player.id];
+        const me=
+        players[game_data.player.id];
 
-if(me){
+        if(me){
 
-myAlly=me.ally;
+            myAlly=me.ally;
 
-}
+        }
 
-/* ALLIES */
+        /* ALLIES */
 
-setStatus('Loading allies');
+        setStatus('Loading allies');
 
-const allyTxt=
-await fetch('/map/ally.txt')
-.then(r=>r.text());
+        const allyTxt=
+        await fetch('/map/ally.txt')
+        .then(r=>r.text());
 
-allies={};
+        allies={};
 
-allyTxt
-.trim()
-.split('\n')
-.forEach(line=>{
+        allyTxt
+        .trim()
+        .split('\n')
+        .forEach(line=>{
 
-if(!line)return;
+            if(!line)return;
 
-const a=line.split(',');
+            const a=line.split(',');
 
-allies[a[0]]={
+            allies[a[0]]={
 
-tag:a[2]
+                tag:a[2]
 
-};
+            };
 
-});
+        });
 
-/* VILLAGES */
+        /* VILLAGES */
 
-setStatus('Loading villages');
+        setStatus('Loading villages');
 
-const villageTxt=
-await fetch('/map/village.txt')
-.then(r=>r.text());
+        const villageTxt=
+        await fetch('/map/village.txt')
+        .then(r=>r.text());
 
-const lines=
-villageTxt.split('\n');
+        const lines=
+        villageTxt.split('\n');
 
-const c=currentCoord();
+        const c=currentCoord();
 
-const radius=
-+document.querySelector('#tw_radius')
-.value;
+        const radius=
+        +document.querySelector('#tw_radius').value;
 
-villages=[];
+        villages=[];
 
-let processed=0;
+        let processed=0;
 
-for(const line of lines){
+        for(const line of lines){
 
-processed++;
+            processed++;
 
-if(processed%50000===0){
+            if(processed%50000===0){
 
-setStatus(
-'Processing '+processed
-);
+                setStatus(
+                    'Processing '+processed
+                );
 
-await new Promise(r=>
-setTimeout(r,0)
-);
+                await new Promise(r=>
+                    setTimeout(r,0)
+                );
 
-}
+            }
 
-if(!line)continue;
+            if(!line)continue;
 
-const v=line.split(',');
+            const v=line.split(',');
 
-const x=+v[2];
-const y=+v[3];
+            const x=+v[2];
+            const y=+v[3];
 
-const d=
-dist(
-c.x,
-c.y,
-x,
-y
-);
+            const d=
+            dist(
+                c.x,
+                c.y,
+                x,
+                y
+            );
 
-/* =====================================
-   CLOSEST FIRST
-===================================== */
+            /* ONLY RADIUS */
 
-if(d>radius)continue;
+            if(d>radius)continue;
 
-villages.push({
+            villages.push({
 
-id:v[0],
-name:v[1],
-x,
-y,
-playerId:v[4],
-points:+v[5],
-distance:d
+                id:v[0],
+                name:v[1],
 
-});
+                x,
+                y,
 
-}
+                playerId:v[4],
 
-/* SORT */
+                points:+v[5],
 
-villages.sort(
-(a,b)=>a.distance-b.distance
-);
+                distance:d
 
-setStatus(
-'Loaded '+villages.length
-);
+            });
 
-renderTable();
+        }
 
-/* START BARB ANALYZE */
+        /* SORT CLOSEST FIRST */
 
-scanBarbsQueue();
+        villages.sort(
+            (a,b)=>a.distance-b.distance
+        );
 
-}catch(e){
+        setStatus(
+            'Loaded '+villages.length
+        );
 
-console.error(e);
+        renderTable();
 
-setStatus('Load error');
+        /* START BARB SCAN */
 
-}
+        scanBarbsQueue();
+
+    }catch(e){
+
+        console.error(e);
+
+        setStatus('Load error');
+
+    }
 
 }
 
 /* =========================================
-   BARB ANALYZER
+   BARB SCANNER
 ========================================= */
 
 let scanning=false;
 
 async function scanBarbsQueue(){
 
-if(scanning)return;
+    if(scanning)return;
 
-scanning=true;
+    scanning=true;
 
-const barbs=
-villages
-.filter(v=>!v.playerId)
-.sort((a,b)=>a.distance-b.distance);
+    const barbs=
+    villages
+    .filter(v=>!v.playerId)
+    .sort((a,b)=>a.distance-b.distance);
 
-/* =====================================
-   NEAREST FIRST
-===================================== */
+    for(const barb of barbs){
 
-for(const barb of barbs){
+        /* CACHE */
 
-/* CACHE */
+        if(barbCache[barb.id]){
+            continue;
+        }
 
-if(barbCache[barb.id]){
-continue;
-}
+        try{
 
-try{
+            setStatus(
+                'Checking '+barb.x+'|'+barb.y
+            );
 
-setStatus(
-'Checking '+barb.x+'|'+barb.y
-);
+            const url=
+            `/game.php?village=${game_data.village.id}&screen=info_village&id=${barb.id}`;
 
-const url=
-`/game.php?village=${game_data.village.id}&screen=info_village&id=${barb.id}`;
+            const html=
+            await fetch(url)
+            .then(r=>r.text());
 
-const html=
-await fetch(url)
-.then(r=>r.text());
+            /* =====================================
+               REAL BARB DETECTION
+            ===================================== */
 
-/* =====================================
-   LAST ATTACK PARSER
-===================================== */
+            let known=false;
 
-let known=false;
+            /*
+               KNOWN BARB:
+               has full row:
+               <td>Ostatni atak</td>
 
-/* DATA:
-25.05. 01:02
-*/
+               NEW BARB:
+               row does NOT exist
+            */
 
-const attackMatch=
-html.match(
-/Ostatni atak:[\s\S]*?(\d{1,2}\.\d{1,2}\.\s\d{1,2}:\d{2})/
-);
+            if(
+                /<td[^>]*>\s*Ostatni atak\s*<\/td>/i
+                .test(html)
+            ){
 
-if(attackMatch){
+                known=true;
 
-known=true;
+            }
 
-}
+            barbCache[barb.id]={
 
-/* FALLBACK */
+                known,
+                time:Date.now()
 
-if(
-html.includes('Własne rozkazy')
-){
+            };
 
-known=true;
+            saveBarbs();
 
-}
+            renderTable();
 
-barbCache[barb.id]={
+        }catch(e){
 
-known,
-time:Date.now()
+            console.error(e);
 
-};
+        }
 
-saveBarbs();
+        /* DELAY */
 
-renderTable();
+        await new Promise(r=>
+            setTimeout(r,350)
+        );
 
-}catch(e){
+    }
 
-console.error(e);
+    scanning=false;
 
-}
-
-/* =====================================
-   DELAY
-===================================== */
-
-await new Promise(r=>
-setTimeout(r,350)
-);
-
-}
-
-scanning=false;
-
-setStatus('Barb scan finished');
+    setStatus('Barb scan finished');
 
 }
 
@@ -621,48 +617,49 @@ setStatus('Barb scan finished');
 
 function getPlayerActivity(playerId){
 
-const h=
-playerHistory[playerId];
+    const h=
+    playerHistory[playerId];
 
-if(!h || h.length<2){
+    if(!h || h.length<2){
 
-return{
+        return{
 
-status:'UNKNOWN',
-d1:0,
-d2:0,
-d7:0
+            status:'UNKNOWN',
 
-};
+            d1:0,
+            d2:0,
+            d7:0
 
-}
+        };
 
-const latest=
-h[h.length-1];
+    }
 
-const oldest=
-h[0];
+    const latest=
+    h[h.length-1];
 
-const diff=
-latest.points-oldest.points;
+    const oldest=
+    h[0];
 
-let status='ACTIVE';
+    const diff=
+    latest.points-oldest.points;
 
-if(diff===0){
+    let status='ACTIVE';
 
-status='INACTIVE';
+    if(diff===0){
 
-}
+        status='INACTIVE';
 
-return{
+    }
 
-status,
+    return{
 
-d1:diff,
-d2:diff,
-d7:diff
+        status,
 
-};
+        d1:diff,
+        d2:diff,
+        d7:diff
+
+    };
 
 }
 
@@ -672,54 +669,81 @@ d7:diff
 
 function filtered(){
 
-const search=
-document.querySelector('#tw_search')
-.value
-.toLowerCase();
+    const search=
+    document
+    .querySelector('#tw_search')
+    .value
+    .toLowerCase();
 
-return villages.filter(v=>{
+    return villages.filter(v=>{
 
-const p=players[v.playerId];
+        const p=
+        players[v.playerId];
 
-const isBarb=!p;
+        const isBarb=!p;
 
-const barb=
-barbCache[v.id];
+        const barb=
+        barbCache[v.id];
 
-const known=
-barb?.known===true;
+        const known=
+        barb?.known===true;
 
-/* FILTERS */
+        /* BARB FILTERS */
 
-if(isBarb&&!cfg.showBarbs)
-return false;
+        if(isBarb&&!cfg.showBarbs)
+        return false;
 
-if(!isBarb&&!cfg.showPlayers)
-return false;
+        if(!isBarb&&!cfg.showPlayers)
+        return false;
 
-if(isBarb){
+        if(isBarb){
 
-if(!cfg.showKnown&&known)
-return false;
+            if(
+                !cfg.showKnown &&
+                known
+            ){
+                return false;
+            }
 
-if(!cfg.showUnknown&&!known)
-return false;
+            if(
+                !cfg.showUnknown &&
+                !known
+            ){
+                return false;
+            }
 
-if(cfg.onlyUnknown&&known)
-return false;
+            if(
+                cfg.onlyUnknown &&
+                known
+            ){
+                return false;
+            }
 
-}
+        }
 
-/* SEARCH */
+        /* SEARCH */
 
-if(!search)return true;
+        if(!search)
+        return true;
 
-return(
-v.name.toLowerCase().includes(search) ||
-(p&&p.name.toLowerCase().includes(search))
-);
+        return(
 
-});
+            v.name
+            .toLowerCase()
+            .includes(search)
+
+            ||
+
+            (
+                p &&
+                p.name
+                .toLowerCase()
+                .includes(search)
+            )
+
+        );
+
+    });
 
 }
 
@@ -729,9 +753,10 @@ v.name.toLowerCase().includes(search) ||
 
 function renderTable(){
 
-const data=filtered();
+    const data=
+    filtered();
 
-let html=`
+    let html=`
 
 <table style="
 width:100%;
@@ -759,53 +784,56 @@ z-index:5;
 </tr>
 `;
 
-data.forEach(v=>{
+    data.forEach(v=>{
 
-const p=players[v.playerId];
+        const p=
+        players[v.playerId];
 
-const isBarb=!p;
+        const isBarb=!p;
 
-const barb=
-barbCache[v.id];
+        const barb=
+        barbCache[v.id];
 
-const known=
-barb?.known===true;
+        const known=
+        barb?.known===true;
 
-let bg='#f8eed1';
+        let bg='#f8eed1';
 
-/* BARBS */
+        /* BARB COLORS */
 
-if(isBarb){
+        if(isBarb){
 
-bg=known
-?'#e4d39a'
-:'#cfe6b8';
+            bg=known
+            ?'#e4d39a'
+            :'#cfe6b8';
 
-}
+        }
 
-/* TRIBE */
+        /* MY TRIBE */
 
-if(
-p &&
-p.ally===myAlly
-){
+        if(
+            p &&
+            p.ally===myAlly
+        ){
 
-bg='#c9d8ff';
+            bg='#c9d8ff';
 
-}
+        }
 
-const relation=
-p &&
-p.ally===myAlly
-?'🛡 TRIBE'
-:'';
+        const relation=
+        (
+            p &&
+            p.ally===myAlly
+        )
+        ?'🛡 TRIBE'
+        :'';
 
-const act=
-p
-?getPlayerActivity(p.id)
-:null;
+        const act=
+        p
+        ?getPlayerActivity(p.id)
+        :null;
 
-html+=`
+        html+=`
 
 <tr style="
 border-bottom:1px solid #c4a46a;
@@ -875,12 +903,13 @@ known
 </tr>
 `;
 
-});
+    });
 
-html+=`</table>`;
+    html+=`</table>`;
 
-document.querySelector('#tw_table')
-.innerHTML=html;
+    document
+    .querySelector('#tw_table')
+    .innerHTML=html;
 
 }
 
@@ -902,29 +931,34 @@ document
 'tw_known',
 'tw_unknown',
 'tw_only_unknown'
-].forEach(id=>{
+]
+.forEach(id=>{
 
-document
-.querySelector('#'+id)
-.onchange=e=>{
+    document
+    .querySelector('#'+id)
+    .onchange=e=>{
 
-const map={
+        const map={
 
-tw_barbs:'showBarbs',
-tw_players:'showPlayers',
-tw_known:'showKnown',
-tw_unknown:'showUnknown',
-tw_only_unknown:'onlyUnknown'
+            tw_barbs:'showBarbs',
+            tw_players:'showPlayers',
 
-};
+            tw_known:'showKnown',
+            tw_unknown:'showUnknown',
 
-cfg[map[id]]=e.target.checked;
+            tw_only_unknown:'onlyUnknown'
 
-saveConfig();
+        };
 
-renderTable();
+        cfg[
+            map[id]
+        ]=e.target.checked;
 
-};
+        saveConfig();
+
+        renderTable();
+
+    };
 
 });
 
@@ -941,36 +975,36 @@ document
 .querySelector('#tw_header')
 .onmousedown=e=>{
 
-drag=true;
+    drag=true;
 
-offsetX=
-e.clientX-panel.offsetLeft;
+    offsetX=
+    e.clientX-panel.offsetLeft;
 
-offsetY=
-e.clientY-panel.offsetTop;
+    offsetY=
+    e.clientY-panel.offsetTop;
 
 };
 
 document.onmouseup=()=>{
 
-drag=false;
+    drag=false;
 
-cfg.panelX=panel.offsetLeft;
-cfg.panelY=panel.offsetTop;
+    cfg.panelX=panel.offsetLeft;
+    cfg.panelY=panel.offsetTop;
 
-saveConfig();
+    saveConfig();
 
 };
 
 document.onmousemove=e=>{
 
-if(!drag)return;
+    if(!drag)return;
 
-panel.style.left=
-e.clientX-offsetX+'px';
+    panel.style.left=
+    e.clientX-offsetX+'px';
 
-panel.style.top=
-e.clientY-offsetY+'px';
+    panel.style.top=
+    e.clientY-offsetY+'px';
 
 };
 
@@ -980,10 +1014,10 @@ e.clientY-offsetY+'px';
 
 function destroy(){
 
-panel.remove();
+    panel.remove();
 
-delete window.TWMPRO_RUNNING;
-delete window.TWMPRO_DESTROY;
+    delete window.TWMPRO_RUNNING;
+    delete window.TWMPRO_DESTROY;
 
 }
 
