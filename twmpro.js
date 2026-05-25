@@ -3,9 +3,8 @@
 'use strict';
 
 /* =========================================
-   TWMPRO AI CORE v5
-   EMPIRE EDITION
-   FULL REWRITE
+   TWMPRO AI CORE v6
+   PLAYER INTELLIGENCE EDITION
 ========================================= */
 
 /* =========================================
@@ -50,9 +49,9 @@ const TWM=window.TWMAI;
 
 TWM.config={
 
-    storage:'TWMAI_V5',
+    storage:'TWMAI_V6',
 
-    radius:50,
+    radius:60,
 
     refresh:120000,
 
@@ -75,9 +74,11 @@ TWM.state={
 
     known:{},
 
-    timer:null,
+    playerAI:{},
 
-    currentTab:'farm'
+    currentTab:'players',
+
+    timer:null
 
 };
 
@@ -189,7 +190,7 @@ TWM.Helpers.status=(txt)=>{
 };
 
 /* =========================================
-   DATA ENGINE
+   DATA
 ========================================= */
 
 TWM.Data={};
@@ -332,8 +333,8 @@ TWM.Data.loadMyVillages=()=>{
         }
 
         else if(
-            lower.includes('noble') ||
-            lower.includes('snob')
+            lower.includes('snob') ||
+            lower.includes('noble')
         ){
 
             role='👑 NOBLE';
@@ -353,6 +354,31 @@ TWM.Data.loadMyVillages=()=>{
 
     });
 
+    /* FALLBACK */
+
+    if(
+        TWM.state.myVillages.length===0
+    ){
+
+        const c=
+        TWM.Helpers.coord(
+            game_data.village.coord
+        );
+
+        TWM.state.myVillages.push({
+
+            name:
+            game_data.village.name,
+
+            x:c.x,
+            y:c.y,
+
+            role:'🏰 CURRENT'
+
+        });
+
+    }
+
 };
 
 /* =========================================
@@ -366,14 +392,13 @@ async()=>{
     await fetch('/map/village.txt')
     .then(r=>r.text());
 
-    const lines=
-    txt.split('\n');
-
     TWM.state.villages=[];
 
-    for(const line of lines){
+    txt.trim()
+    .split('\n')
+    .forEach(line=>{
 
-        if(!line)continue;
+        if(!line)return;
 
         const v=
         line.split(',');
@@ -407,9 +432,7 @@ async()=>{
 
         if(
             nearest>TWM.config.radius
-        ){
-            continue;
-        }
+        )return;
 
         TWM.state.villages.push({
 
@@ -424,18 +447,16 @@ async()=>{
 
             points:+v[5],
 
-            distance:nearest,
-
-            ai:{}
+            distance:nearest
 
         });
 
-    }
+    });
 
 };
 
 /* =========================================
-   IMPORT
+   IMPORT KNOWN
 ========================================= */
 
 TWM.Import={};
@@ -495,12 +516,7 @@ async()=>{
 
                         TWM.state.known[
                             m[1]
-                        ]={
-
-                            known:true,
-                            updated:Date.now()
-
-                        };
+                        ]=true;
 
                     }
 
@@ -518,12 +534,7 @@ async()=>{
 
                         TWM.state.known[
                             m[1]
-                        ]={
-
-                            known:true,
-                            updated:Date.now()
-
-                        };
+                        ]=true;
 
                     }
 
@@ -548,387 +559,294 @@ async()=>{
 };
 
 /* =========================================
-   AI
+   PLAYER AI
 ========================================= */
 
 TWM.AI={};
 
-/* =========================================
-   FARM AI
-========================================= */
+TWM.AI.runPlayers=()=>{
 
-TWM.AI.analyzeBarb=
-(v)=>{
-
-    const p=
-    TWM.state.players[
-        v.playerId
-    ];
-
-    if(p)return null;
-
-    let score=50;
-
-    /* DISTANCE */
-
-    if(v.distance<=5){
-
-        score+=30;
-
-    }
-
-    else if(v.distance<=10){
-
-        score+=20;
-
-    }
-
-    else if(v.distance<=20){
-
-        score+=5;
-
-    }
-
-    else if(v.distance>30){
-
-        score-=20;
-
-    }
-
-    else if(v.distance>40){
-
-        score-=35;
-
-    }
-
-    /* POINTS */
-
-    if(
-        v.points>=80 &&
-        v.points<=400
-    ){
-
-        score+=10;
-
-    }
-
-    /* KNOWN */
-
-    const known=
-    TWM.state.known[
-        v.id
-    ]?.known===true;
-
-    if(!known){
-
-        score+=15;
-
-    }
-
-    /* BARB DENSITY */
-
-    let nearBarbs=0;
-
-    let nearPlayers=0;
-
-    TWM.state.villages
-    .forEach(other=>{
-
-        if(
-            other.id===v.id
-        )return;
-
-        const d=
-        TWM.Helpers.distance(
-
-            v.x,
-            v.y,
-
-            other.x,
-            other.y
-
-        );
-
-        if(d>4)return;
-
-        const op=
-        TWM.state.players[
-            other.playerId
-        ];
-
-        if(op){
-
-            nearPlayers++;
-
-        }
-
-        else{
-
-            nearBarbs++;
-
-        }
-
-    });
-
-    score+=Math.min(
-        nearBarbs,
-        12
-    );
-
-    score-=nearPlayers*4;
-
-    /* DANGER */
-
-    let danger=0;
-
-    TWM.state.villages
-    .forEach(other=>{
-
-        const op=
-        TWM.state.players[
-            other.playerId
-        ];
-
-        if(!op)return;
-
-        const d=
-        TWM.Helpers.distance(
-
-            v.x,
-            v.y,
-
-            other.x,
-            other.y
-
-        );
-
-        if(d<=6){
-
-            danger++;
-
-        }
-
-    });
-
-    score-=danger*5;
-
-    score=
-    TWM.Helpers.limit(
-        score,
-        0,
-        100
-    );
-
-    /* STATUS */
-
-    let status='💀 BAD';
-
-    if(score>=80){
-
-        status='🔥 PERFECT';
-
-    }
-
-    else if(score>=60){
-
-        status='🟢 GOOD';
-
-    }
-
-    else if(score>=40){
-
-        status='⚠ MID';
-
-    }
-
-    return{
-
-        score,
-        status,
-
-        danger,
-
-        nearBarbs,
-
-        nearPlayers,
-
-        known
-
-    };
-
-};
-
-/* =========================================
-   MAP AI
-========================================= */
-
-TWM.AI.Map={};
-
-TWM.AI.Map.sectors={};
-
-TWM.AI.Map.getK=
-(x,y)=>{
-
-    return Math.floor(y/100)+
-    ''+
-    Math.floor(x/100);
-
-};
-
-TWM.AI.Map.run=()=>{
-
-    TWM.AI.Map.sectors={};
+    TWM.state.playerAI={};
 
     TWM.state.villages
     .forEach(v=>{
-
-        const k=
-        TWM.AI.Map.getK(
-            v.x,
-            v.y
-        );
-
-        if(
-            !TWM.AI.Map.sectors[k]
-        ){
-
-            TWM.AI.Map.sectors[k]={
-
-                continent:k,
-
-                villages:0,
-
-                barbs:0,
-
-                players:0,
-
-                active:0,
-
-                strong:0,
-
-                score:0,
-
-                type:''
-
-            };
-
-        }
-
-        const s=
-        TWM.AI.Map.sectors[k];
-
-        s.villages++;
 
         const p=
         TWM.state.players[
             v.playerId
         ];
 
-        if(!p){
+        if(!p)return;
 
-            s.barbs++;
+        if(
+            p.name===game_data.player.name
+        )return;
+
+        if(
+            !TWM.state.playerAI[
+                p.id
+            ]
+        ){
+
+            TWM.state.playerAI[
+                p.id
+            ]={
+
+                id:p.id,
+
+                name:p.name,
+
+                ally:
+                TWM.state.allies[
+                    p.ally
+                ]?.tag||'-',
+
+                villages:0,
+
+                points:p.points,
+
+                nearest:999,
+
+                nearbyBarbs:0,
+
+                nearbyPlayers:0,
+
+                morale:100,
+
+                conquer:0,
+
+                status:'',
+
+                role:''
+
+            };
+
+        }
+
+        const ai=
+        TWM.state.playerAI[
+            p.id
+        ];
+
+        ai.villages++;
+
+        if(
+            v.distance<ai.nearest
+        ){
+
+            ai.nearest=
+            v.distance;
+
+        }
+
+    });
+
+    /* ANALYZE */
+
+    Object.values(
+        TWM.state.playerAI
+    )
+    .forEach(ai=>{
+
+        /* MORALE */
+
+        const myPoints=
+        game_data.player.points;
+
+        if(
+            ai.points>
+            myPoints
+        ){
+
+            ai.morale=
+            Math.max(
+
+                20,
+
+                Math.floor(
+
+                    (
+                        myPoints/
+                        ai.points
+                    )*100
+
+                )
+
+            );
 
         }
 
         else{
 
-            s.players++;
-
-            if(
-                p.points>5000
-            ){
-
-                s.active++;
-
-            }
-
-            if(
-                p.points>25000
-            ){
-
-                s.strong++;
-
-            }
+            ai.morale=100;
 
         }
 
-    });
+        /* BARBS AROUND */
 
-    Object.values(
-        TWM.AI.Map.sectors
-    )
-    .forEach(s=>{
+        TWM.state.villages
+        .forEach(v=>{
 
-        const barbRatio=
-        s.barbs/
-        Math.max(
-            s.villages,
-            1
-        );
+            const d=
+            TWM.Helpers.distance(
 
-        const activeRatio=
-        s.active/
-        Math.max(
-            s.players,
-            1
-        );
+                v.x,
+                v.y,
 
-        s.score=
-        Math.floor(
+                v.x,
+                v.y
 
-            (
-                barbRatio*100
-            )-
-            (
-                activeRatio*40
-            )
+            );
 
-        );
+            if(d>8)return;
 
-        s.score=
-        TWM.Helpers.limit(
-            s.score,
-            0,
-            100
-        );
+            const p=
+            TWM.state.players[
+                v.playerId
+            ];
 
-        s.type='⚔ WAR';
+            if(!p){
 
-        if(
-            s.score>=70
-        ){
+                ai.nearbyBarbs++;
 
-            s.type='🛌 DEAD';
+            }
+
+            else{
+
+                ai.nearbyPlayers++;
+
+            }
+
+        });
+
+        /* CONQUER SCORE */
+
+        let score=50;
+
+        /* DIST */
+
+        if(ai.nearest<=5){
+
+            score+=30;
 
         }
 
         else if(
-            s.score>=50
+            ai.nearest<=10
         ){
 
-            s.type='🌾 FARM';
+            score+=20;
+
+        }
+
+        else if(
+            ai.nearest<=20
+        ){
+
+            score+=10;
+
+        }
+
+        else{
+
+            score-=20;
+
+        }
+
+        /* MORALE */
+
+        if(ai.morale>=100){
+
+            score+=25;
+
+        }
+
+        else if(
+            ai.morale<50
+        ){
+
+            score-=40;
+
+        }
+
+        /* PLAYER SIZE */
+
+        if(ai.points<5000){
+
+            score+=20;
+
+        }
+
+        else if(
+            ai.points>100000
+        ){
+
+            score-=40;
+
+        }
+
+        /* BARBS */
+
+        score+=Math.min(
+            ai.nearbyBarbs,
+            10
+        );
+
+        score=
+        TWM.Helpers.limit(
+            score,
+            0,
+            100
+        );
+
+        ai.conquer=score;
+
+        /* STATUS */
+
+        ai.status='⚔ CONTESTED';
+
+        if(score>=80){
+
+            ai.status=
+            '🔥 EASY TARGET';
+
+        }
+
+        else if(
+            score>=60
+        ){
+
+            ai.status=
+            '🟡 GOOD TARGET';
+
+        }
+
+        else if(
+            score<40
+        ){
+
+            ai.status=
+            '🛡 HARD TARGET';
+
+        }
+
+        /* ROLE */
+
+        ai.role='🌾 FARMER';
+
+        if(ai.points>50000){
+
+            ai.role='⚔ AGGRESSIVE';
+
+        }
+
+        if(ai.points<5000){
+
+            ai.role='💤 INACTIVE';
 
         }
 
     });
-
-};
-
-/* =========================================
-   RUN AI
-========================================= */
-
-TWM.AI.run=()=>{
-
-    TWM.state.villages
-    .forEach(v=>{
-
-        v.ai=
-        TWM.AI.analyzeBarb(v);
-
-    });
-
-    TWM.AI.Map.run();
 
 };
 
@@ -1008,9 +926,9 @@ Object.assign(
         top:
         TWM.config.panelY+'px',
 
-        width:'1400px',
+        width:'1450px',
 
-        height:'760px',
+        height:'780px',
 
         background:'#f4e4bc',
 
@@ -1049,7 +967,7 @@ cursor:move;
 ">
 
 <div>
-TWMPRO AI CORE v5
+TWMPRO AI CORE v6
 </div>
 
 <div>
@@ -1071,12 +989,12 @@ align-items:center;
 border-bottom:1px solid #7a5b2e;
 ">
 
-<button id="tab_farm">
-🔥 FARM AI
+<button id="tab_players">
+👤 PLAYERS
 </button>
 
-<button id="tab_map">
-🗺 MAP AI
+<button id="tab_barbs">
+🌾 BARBS
 </button>
 
 <button id="tab_empire">
@@ -1089,8 +1007,8 @@ SCAN
 
 <select id="twm_sort">
 
-<option value="score">
-AI SCORE
+<option value="conquer">
+CONQUER
 </option>
 
 <option value="distance">
@@ -1102,30 +1020,6 @@ POINTS
 </option>
 
 </select>
-
-<select id="twm_filter">
-
-<option value="all">
-ALL
-</option>
-
-<option value="new">
-ONLY NEW
-</option>
-
-<option value="known">
-ONLY KNOWN
-</option>
-
-<option value="good">
-GOOD+
-</option>
-
-</select>
-
-<input
-id="twm_search"
-placeholder="search">
 
 </div>
 
@@ -1193,10 +1087,10 @@ TWM.UI.float.onclick=()=>{
 };
 
 /* =========================================
-   FARM RENDER
+   PLAYERS TAB
 ========================================= */
 
-TWM.UI.renderFarm=()=>{
+TWM.UI.renderPlayers=()=>{
 
     const content=
     document.querySelector(
@@ -1206,48 +1100,10 @@ TWM.UI.renderFarm=()=>{
     const sort=
     $('#twm_sort').val();
 
-    const filter=
-    $('#twm_filter').val();
-
-    const search=
-    $('#twm_search')
-    .val()
-    .toLowerCase();
-
     let data=
-    TWM.state.villages
-    .filter(v=>v.ai);
-
-    /* FILTER */
-
-    data=data.filter(v=>{
-
-        if(
-            filter==='new' &&
-            v.ai.known
-        )return false;
-
-        if(
-            filter==='known' &&
-            !v.ai.known
-        )return false;
-
-        if(
-            filter==='good' &&
-            v.ai.score<60
-        )return false;
-
-        if(
-            search &&
-            !(
-                `${v.x}|${v.y}`
-                .includes(search)
-            )
-        )return false;
-
-        return true;
-
-    });
+    Object.values(
+        TWM.state.playerAI
+    );
 
     /* SORT */
 
@@ -1256,8 +1112,8 @@ TWM.UI.renderFarm=()=>{
         if(sort==='distance'){
 
             return(
-                a.distance-
-                b.distance
+                a.nearest-
+                b.nearest
             );
 
         }
@@ -1272,8 +1128,8 @@ TWM.UI.renderFarm=()=>{
         }
 
         return(
-            b.ai.score-
-            a.ai.score
+            b.conquer-
+            a.conquer
         );
 
     });
@@ -1293,44 +1149,43 @@ position:sticky;
 top:0;
 ">
 
-<th>AI</th>
-<th>SCORE</th>
-<th>COORD</th>
+<th>PLAYER</th>
+<th>ALLY</th>
+<th>POINTS</th>
+<th>VILLS</th>
 <th>DIST</th>
-<th>PTS</th>
-<th>BARBS</th>
-<th>PLAYERS</th>
-<th>DANGER</th>
+<th>MORALE</th>
+<th>CONQUER</th>
+<th>ROLE</th>
 <th>STATUS</th>
-<th>ACTION</th>
 
 </tr>
 
 `;
 
-    data.forEach(v=>{
+    data.forEach(p=>{
 
         let bg='#f8eed1';
 
-        if(v.ai.score>=80){
+        if(
+            p.conquer>=80
+        ){
 
             bg='#8fd18f';
 
         }
 
-        else if(v.ai.score>=60){
+        else if(
+            p.conquer>=60
+        ){
 
             bg='#cfe6b8';
 
         }
 
-        else if(v.ai.score>=40){
-
-            bg='#fff0b3';
-
-        }
-
-        else{
+        else if(
+            p.conquer<40
+        ){
 
             bg='#f5b3b3';
 
@@ -1344,12 +1199,120 @@ border-bottom:1px solid #c4a46a;
 ">
 
 <td>
-${v.ai.status}
+${p.name}
 </td>
 
 <td>
-${v.ai.score}
+${p.ally}
 </td>
+
+<td>
+${p.points}
+</td>
+
+<td>
+${p.villages}
+</td>
+
+<td>
+${p.nearest.toFixed(1)}
+</td>
+
+<td>
+${p.morale}%
+</td>
+
+<td>
+${p.conquer}
+</td>
+
+<td>
+${p.role}
+</td>
+
+<td>
+${p.status}
+</td>
+
+</tr>
+
+`;
+
+    });
+
+    html+=`</table>`;
+
+    content.innerHTML=html;
+
+};
+
+/* =========================================
+   BARBS TAB
+========================================= */
+
+TWM.UI.renderBarbs=()=>{
+
+    const content=
+    document.querySelector(
+        '#twm_content'
+    );
+
+    const data=
+    TWM.state.villages
+    .filter(v=>
+
+        !TWM.state.players[
+            v.playerId
+        ]
+
+    )
+    .sort((a,b)=>
+
+        a.distance-
+        b.distance
+
+    );
+
+    let html=`
+
+<table style="
+width:100%;
+border-collapse:collapse;
+font-size:11px;
+">
+
+<tr style="
+background:#7a5b2e;
+color:#f4e4bc;
+">
+
+<th>COORD</th>
+<th>DIST</th>
+<th>PTS</th>
+<th>STATUS</th>
+
+</tr>
+
+`;
+
+    data.forEach(v=>{
+
+        const known=
+        TWM.state.known[
+            v.id
+        ]===true;
+
+        html+=`
+
+<tr style="
+background:
+${
+known
+?'#fff0b3'
+:'#cfe6b8'
+};
+border-bottom:1px solid #c4a46a;
+">
 
 <td>
 
@@ -1372,39 +1335,15 @@ ${v.points}
 </td>
 
 <td>
-${v.ai.nearBarbs}
-</td>
-
-<td>
-${v.ai.nearPlayers}
-</td>
-
-<td>
-${v.ai.danger}
-</td>
-
-<td>
 
 ${
-v.ai.known
+known
 ?'🟡 KNOWN'
-:'🟢 NEW'
+:'🟢 UNKNOWN'
 }
 
 </td>
 
-<td>
-
-<a
-href="/game.php?village=${game_data.village.id}&screen=place&target=${v.id}"
-target="_blank">
-
-⚔
-
-</a>
-
-</td>
-
 </tr>
 
 `;
@@ -1418,125 +1357,7 @@ target="_blank">
 };
 
 /* =========================================
-   MAP RENDER
-========================================= */
-
-TWM.UI.renderMap=()=>{
-
-    const content=
-    document.querySelector(
-        '#twm_content'
-    );
-
-    const data=
-    Object.values(
-        TWM.AI.Map.sectors
-    )
-    .sort((a,b)=>
-
-        b.score-a.score
-
-    );
-
-    let html=`
-
-<table style="
-width:100%;
-border-collapse:collapse;
-font-size:11px;
-">
-
-<tr style="
-background:#7a5b2e;
-color:#f4e4bc;
-">
-
-<th>K</th>
-<th>TYPE</th>
-<th>SCORE</th>
-<th>BARBS</th>
-<th>PLAYERS</th>
-<th>ACTIVE</th>
-
-</tr>
-
-`;
-
-    data.forEach(s=>{
-
-        let bg='#f8eed1';
-
-        if(
-            s.type.includes(
-                'DEAD'
-            )
-        ){
-
-            bg='#ddd';
-
-        }
-
-        else if(
-            s.type.includes(
-                'FARM'
-            )
-        ){
-
-            bg='#cfe6b8';
-
-        }
-
-        else{
-
-            bg='#f5b3b3';
-
-        }
-
-        html+=`
-
-<tr style="
-background:${bg};
-border-bottom:1px solid #c4a46a;
-">
-
-<td>
-K${s.continent}
-</td>
-
-<td>
-${s.type}
-</td>
-
-<td>
-${s.score}
-</td>
-
-<td>
-${s.barbs}
-</td>
-
-<td>
-${s.players}
-</td>
-
-<td>
-${s.active}
-</td>
-
-</tr>
-
-`;
-
-    });
-
-    html+=`</table>`;
-
-    content.innerHTML=html;
-
-};
-
-/* =========================================
-   EMPIRE
+   EMPIRE TAB
 ========================================= */
 
 TWM.UI.renderEmpire=()=>{
@@ -1605,27 +1426,27 @@ ${v.x}|${v.y}
    EVENTS
 ========================================= */
 
-$('#tab_farm').on('click',()=>{
+$('#tab_players').on('click',()=>{
 
-    TWM.state.currentTab='farm';
-
-    TWM.UI.renderFarm();
+    TWM.UI.renderPlayers();
 
 });
 
-$('#tab_map').on('click',()=>{
+$('#tab_barbs').on('click',()=>{
 
-    TWM.state.currentTab='map';
-
-    TWM.UI.renderMap();
+    TWM.UI.renderBarbs();
 
 });
 
 $('#tab_empire').on('click',()=>{
 
-    TWM.state.currentTab='empire';
-
     TWM.UI.renderEmpire();
+
+});
+
+$('#twm_sort').on('change',()=>{
+
+    TWM.UI.renderPlayers();
 
 });
 
@@ -1645,31 +1466,9 @@ $('#twm_scan').on('click',async()=>{
 
     await TWM.Data.loadVillages();
 
-    TWM.AI.run();
+    TWM.AI.runPlayers();
 
-    if(
-        TWM.state.currentTab
-        ==='map'
-    ){
-
-        TWM.UI.renderMap();
-
-    }
-
-    else if(
-        TWM.state.currentTab
-        ==='empire'
-    ){
-
-        TWM.UI.renderEmpire();
-
-    }
-
-    else{
-
-        TWM.UI.renderFarm();
-
-    }
+    TWM.UI.renderPlayers();
 
     TWM.Helpers.status(
 
@@ -1678,24 +1477,6 @@ $('#twm_scan').on('click',async()=>{
         ' villages'
 
     );
-
-});
-
-$('#twm_sort').on('change',()=>{
-
-    TWM.UI.renderFarm();
-
-});
-
-$('#twm_filter').on('change',()=>{
-
-    TWM.UI.renderFarm();
-
-});
-
-$('#twm_search').on('input',()=>{
-
-    TWM.UI.renderFarm();
 
 });
 
@@ -1714,7 +1495,7 @@ setInterval(async()=>{
 
         await TWM.Data.loadVillages();
 
-        TWM.AI.run();
+        TWM.AI.runPlayers();
 
     }catch(e){
 
@@ -1800,9 +1581,9 @@ TWM.Data.loadMyVillages();
 
 await TWM.Data.loadVillages();
 
-TWM.AI.run();
+TWM.AI.runPlayers();
 
-TWM.UI.renderFarm();
+TWM.UI.renderPlayers();
 
 TWM.Helpers.status(
 
