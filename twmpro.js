@@ -3,10 +3,8 @@
 'use strict';
 
 /* =========================================================
-   TWMPRO AI CORE v9
-   FULL REBUILD
-   STABLE KNOWN / UNKNOWN
-   REAL DIPLOMACY
+   TWMPRO AI CORE v10
+   STABLE EDITION
 ========================================================= */
 
 /* =========================================================
@@ -16,7 +14,7 @@
 if(game_data.screen!=='map'){
 
     UI.InfoMessage(
-        'Uruchom skrypt na mapie',
+        'Uruchom na mapie',
         3000,
         'error'
     );
@@ -29,17 +27,25 @@ if(game_data.screen!=='map'){
    SINGLE INSTANCE
 ========================================================= */
 
-if(window.TWMAI_V9){
+if(window.TWMAI_V10){
 
-    window.TWMAI_V9.open();
+    try{
+
+        window.TWMAI_V10.open();
+
+    }catch(e){}
 
     return;
 
 }
 
-window.TWMAI_V9={};
+/* =========================================================
+   ROOT
+========================================================= */
 
-const TWM=window.TWMAI_V9;
+window.TWMAI_V10={};
+
+const TWM=window.TWMAI_V10;
 
 /* =========================================================
    CONFIG
@@ -54,10 +60,6 @@ TWM.config={
     width:1500,
 
     height:820,
-
-    /* =====================================
-       DIPLOMACY
-    ===================================== */
 
     allies:[
 
@@ -110,7 +112,7 @@ TWM.Storage.load=()=>{
 
         const raw=
         localStorage.getItem(
-            'TWMAI_V9'
+            'TWMAI_V10'
         );
 
         if(!raw)return;
@@ -135,18 +137,26 @@ TWM.Storage.load=()=>{
 
 TWM.Storage.save=()=>{
 
-    localStorage.setItem(
+    try{
 
-        'TWMAI_V9',
+        localStorage.setItem(
 
-        JSON.stringify({
+            'TWMAI_V10',
 
-            knownCoords:
-            TWM.state.knownCoords
+            JSON.stringify({
 
-        })
+                knownCoords:
+                TWM.state.knownCoords
 
-    );
+            })
+
+        );
+
+    }catch(e){
+
+        console.error(e);
+
+    }
 
 };
 
@@ -157,6 +167,17 @@ TWM.Storage.save=()=>{
 TWM.Helpers={};
 
 TWM.Helpers.coord=(txt)=>{
+
+    if(!txt){
+
+        return{
+
+            x:0,
+            y:0
+
+        };
+
+    }
 
     const c=txt.split('|');
 
@@ -251,7 +272,10 @@ Object.assign(
 
         zIndex:'999999',
 
-        fontSize:'20px'
+        fontSize:'20px',
+
+        boxShadow:
+        '0 0 10px rgba(0,0,0,0.4)'
 
     }
 
@@ -322,7 +346,7 @@ cursor:move;
 ">
 
 <div>
-TWMPRO AI CORE v9
+TWMPRO AI CORE v10
 </div>
 
 <div>
@@ -434,7 +458,7 @@ document.body.appendChild(
 );
 
 /* =========================================================
-   OPEN / CLOSE
+   OPEN CLOSE
 ========================================================= */
 
 TWM.open=()=>{
@@ -486,7 +510,7 @@ $('#twm_close').on('click',()=>{
 
     TWM.UI.float.remove();
 
-    delete window.TWMAI_V9;
+    delete window.TWMAI_V10;
 
 });
 
@@ -538,7 +562,7 @@ $(document).on('mousemove',e=>{
 TWM.Data={};
 
 /* =========================================================
-   PLAYERS
+   LOAD PLAYERS
 ========================================================= */
 
 TWM.Data.loadPlayers=
@@ -578,7 +602,7 @@ async()=>{
 };
 
 /* =========================================================
-   ALLIES
+   LOAD ALLIES
 ========================================================= */
 
 TWM.Data.loadAllies=
@@ -603,8 +627,7 @@ async()=>{
 
             id:a[0],
 
-            tag:
-            decodeURIComponent(a[2]||'-')
+            tag:a[2]||'-'
 
         };
 
@@ -613,7 +636,7 @@ async()=>{
 };
 
 /* =========================================================
-   MY VILLAGES
+   LOAD MY VILLAGES
 ========================================================= */
 
 TWM.Data.loadMyVillages=()=>{
@@ -638,7 +661,7 @@ TWM.Data.loadMyVillages=()=>{
 };
 
 /* =========================================================
-   VILLAGES
+   LOAD VILLAGES
 ========================================================= */
 
 TWM.Data.loadVillages=
@@ -745,10 +768,11 @@ async()=>{
             await fetch(url)
             .then(r=>r.text());
 
-            const coords=
-            html.match(
-                /\d+\|\d+/g
-            )||[];
+            const coords=[
+                ...html.matchAll(
+                    /(\d{3}\|\d{3})/g
+                )
+            ].map(m=>m[1]);
 
             coords.forEach(c=>{
 
@@ -790,16 +814,28 @@ TWM.AI.runPlayers=()=>{
     TWM.state.playerAI={};
 
     const myPlayer=
-    TWM.state.players[
-        game_data.player.id
-    ];
+    Object.values(
+        TWM.state.players
+    ).find(p=>
 
-    const myAllyId=
-    myPlayer?.ally||'0';
+        p.name===
+        game_data.player.name
+
+    );
+
+    if(!myPlayer){
+
+        console.error(
+            'TWM: myPlayer not found'
+        );
+
+        return;
+
+    }
 
     const myTribe=
     TWM.state.allies[
-        myAllyId
+        myPlayer.ally
     ]?.tag||'-';
 
     /* BUILD */
