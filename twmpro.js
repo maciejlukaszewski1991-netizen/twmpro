@@ -1,844 +1,268 @@
-(async()=>{
-
-'use strict';
-
 /* =========================================
-   TWMPRO v8
+   DODAJ do defaults
 ========================================= */
 
-/* =========================================
-   CLEAN START
-========================================= */
+onlyUnknown:false,
 
-if(window.TWMPRO_DESTROY){
-window.TWMPRO_DESTROY();
-}
-
-window.TWMPRO_RUNNING=true;
+showTribe:true,
+showAlly:true,
 
 /* =========================================
-   STORAGE
+   DODAJ po:
+let allies={}
 ========================================= */
 
-const STORAGE='TWMPRO_V8';
+let myTribe=null;
+let allyTags=[];
 
 /* =========================================
-   CONFIG
+   DODAJ helper
 ========================================= */
 
-const defaults={
+function detectDiplomacy(){
 
-radius:20,
+const me=
+players[game_data.player.id];
 
-panelX:100,
-panelY:40,
-panelW:950,
-panelH:600,
+if(!me)return;
 
-showBarbs:true,
-showPlayers:true,
+myTribe=me.ally;
 
-showKnown:true,
-showUnknown:true,
+if(!myTribe)return;
 
-sort:'distance'
+/* =====================================
+   PROSTA LISTA SOJUSZY
+===================================== */
 
-};
+allyTags=[];
 
-let cfg=load();
+Object.values(allies)
+.forEach(a=>{
 
-function load(){
-
-try{
-
-return{
-...defaults,
-...JSON.parse(
-localStorage.getItem(STORAGE)||'{}'
+if(
+a.tag &&
+(
+a.tag.includes(allies[myTribe]?.tag) ||
+allies[myTribe]?.tag.includes(a.tag)
 )
-};
-
-}catch(e){
-
-return defaults;
-
+){
+allyTags.push(a.id);
 }
 
-}
-
-function save(){
-
-localStorage.setItem(
-STORAGE,
-JSON.stringify(cfg)
-);
-
-}
-
-/* =========================================
-   DATA
-========================================= */
-
-let villages=[];
-let players={};
-let allies={};
-
-let knownBarbs={};
-
-try{
-
-knownBarbs=
-JSON.parse(
-localStorage.getItem('TWMPRO_KNOWN_BARBS')||'{}'
-);
-
-}catch(e){}
-
-/* =========================================
-   EVENTS
-========================================= */
-
-const listeners=[];
-
-function addListener(el,type,fn){
-
-el.addEventListener(type,fn);
-
-listeners.push({
-el,
-type,
-fn
 });
 
 }
 
 /* =========================================
-   PANEL
+   ZMIEŃ panel.innerHTML
+   checkboxy
 ========================================= */
 
-const panel=document.createElement('div');
+<label>
+<input
+type="checkbox"
+id="tw_tribe"
+${cfg.showTribe?'checked':''}>
+MY TRIBE
+</label>
 
-panel.id='twmpro_panel';
+<label>
+<input
+type="checkbox"
+id="tw_ally"
+${cfg.showAlly?'checked':''}>
+ALLY
+</label>
 
-panel.style.position='fixed';
-panel.style.left=cfg.panelX+'px';
-panel.style.top=cfg.panelY+'px';
-panel.style.width=cfg.panelW+'px';
-panel.style.height=cfg.panelH+'px';
-panel.style.background='#202225';
-panel.style.color='white';
-panel.style.zIndex='999999';
-panel.style.borderRadius='8px';
-panel.style.display='flex';
-panel.style.flexDirection='column';
-panel.style.resize='both';
-panel.style.overflow='hidden';
-panel.style.fontSize='11px';
-panel.style.boxShadow='0 0 10px rgba(0,0,0,.5)';
+/* =========================================
+   ZMIEŃ cały styl panelu
+========================================= */
 
-panel.innerHTML=`
+panel.style.background='#f4e4bc';
+panel.style.color='#2b1a0a';
+panel.style.border='2px solid #7a5b2e';
+panel.style.boxShadow='0 0 12px rgba(0,0,0,.4)';
+panel.style.fontFamily='Verdana';
 
-<div id="tw_header"
-style="
-padding:8px;
-background:#111;
-cursor:move;
+/* =========================================
+   ZMIEŃ HEADER STYLE
+========================================= */
+
+background:#6b4d24;
+color:#f4e4bc;
+border-bottom:2px solid #3e2b14;
+
+/* =========================================
+   ZMIEŃ STATUS STYLE
+========================================= */
+
+background:#e6d3a3;
+color:#2b1a0a;
 font-weight:bold;
-font-size:14px;
-">
-
-TWMPRO v8
-
-</div>
-
-<div style="
-padding:6px;
-display:flex;
-gap:6px;
-flex-wrap:wrap;
-border-bottom:1px solid #333;
-">
-
-R
-
-<input
-id="tw_radius"
-type="number"
-value="${cfg.radius}"
-style="width:50px">
-
-<button id="tw_scan">
-SCAN
-</button>
-
-<button id="tw_close">
-X
-</button>
-
-<input
-id="tw_search"
-placeholder="search"
-style="width:140px">
-
-<label>
-<input
-type="checkbox"
-id="tw_barbs"
-${cfg.showBarbs?'checked':''}>
-BARB
-</label>
-
-<label>
-<input
-type="checkbox"
-id="tw_players"
-${cfg.showPlayers?'checked':''}>
-PLAYERS
-</label>
-
-<label>
-<input
-type="checkbox"
-id="tw_known"
-${cfg.showKnown?'checked':''}>
-KNOWN
-</label>
-
-<label>
-<input
-type="checkbox"
-id="tw_unknown"
-${cfg.showUnknown?'checked':''}>
-NEW
-</label>
-
-</div>
-
-<div
-id="tw_status"
-style="
-padding:5px;
-border-bottom:1px solid #333;
-color:#00ff88;
-">
-READY
-</div>
-
-<div
-id="tw_table"
-style="
-flex:1;
-overflow:auto;
-">
-</div>
-
-`;
-
-document.body.appendChild(panel);
 
 /* =========================================
-   HELPERS
+   ZMIEŃ table style
 ========================================= */
-
-function setStatus(t){
-
-document.querySelector('#tw_status')
-.innerText=t;
-
-}
-
-function dist(x1,y1,x2,y2){
-
-return Math.sqrt(
-Math.pow(x2-x1,2)+
-Math.pow(y2-y1,2)
-);
-
-}
-
-function currentCoord(){
-
-const c=
-game_data.village.coord
-.split('|');
-
-return{
-x:+c[0],
-y:+c[1]
-};
-
-}
-
-function saveKnown(){
-
-localStorage.setItem(
-'TWMPRO_KNOWN_BARBS',
-JSON.stringify(knownBarbs)
-);
-
-}
-
-/* =========================================
-   LOAD MAP
-========================================= */
-
-async function loadMap(){
-
-setStatus('Loading players');
-
-const playerTxt=
-await fetch('/map/player.txt')
-.then(r=>r.text());
-
-players={};
-
-playerTxt
-.trim()
-.split('\n')
-.forEach(l=>{
-
-const p=l.split(',');
-
-players[p[0]]={
-
-id:p[0],
-name:p[1],
-ally:p[2],
-villages:+p[3],
-points:+p[4]
-
-};
-
-});
-
-setStatus('Loading allies');
-
-const allyTxt=
-await fetch('/map/ally.txt')
-.then(r=>r.text());
-
-allies={};
-
-allyTxt
-.trim()
-.split('\n')
-.forEach(l=>{
-
-const a=l.split(',');
-
-allies[a[0]]={
-tag:a[2]
-};
-
-});
-
-setStatus('Loading villages');
-
-const villageTxt=
-await fetch('/map/village.txt')
-.then(r=>r.text());
-
-const lines=
-villageTxt.split('\n');
-
-const c=currentCoord();
-
-const radius=
-+document.querySelector('#tw_radius')
-.value;
-
-villages=[];
-
-let processed=0;
-
-for(const line of lines){
-
-processed++;
-
-if(processed%50000===0){
-
-setStatus(
-'Processing '+processed
-);
-
-await new Promise(r=>
-setTimeout(r,0)
-);
-
-}
-
-if(!line)continue;
-
-const v=line.split(',');
-
-const x=+v[2];
-const y=+v[3];
-
-const d=
-dist(
-c.x,
-c.y,
-x,
-y
-);
-
-if(d>radius)continue;
-
-villages.push({
-
-id:v[0],
-name:v[1],
-x,
-y,
-playerId:v[4],
-points:+v[5],
-distance:d
-
-});
-
-}
-
-/* SORT BY DISTANCE */
-
-villages.sort(
-(a,b)=>a.distance-b.distance
-);
-
-setStatus(
-'Loaded '+villages.length
-);
-
-renderTable();
-
-}
-
-/* =========================================
-   MARK KNOWN
-========================================= */
-
-window.TWMPRO_TOGGLE_BARB=id=>{
-
-knownBarbs[id]=!knownBarbs[id];
-
-saveKnown();
-
-renderTable();
-
-};
-
-/* =========================================
-   FILTER
-========================================= */
-
-function filtered(){
-
-const search=
-document.querySelector('#tw_search')
-.value
-.toLowerCase();
-
-return villages.filter(v=>{
-
-const isBarb=!v.playerId;
-
-if(isBarb&&!cfg.showBarbs)
-return false;
-
-if(!isBarb&&!cfg.showPlayers)
-return false;
-
-if(isBarb){
-
-const known=
-!!knownBarbs[v.id];
-
-if(!cfg.showKnown&&known)
-return false;
-
-if(!cfg.showUnknown&&!known)
-return false;
-
-}
-
-if(!search)return true;
-
-const p=players[v.playerId];
-
-return(
-v.name.toLowerCase().includes(search) ||
-(p&&p.name.toLowerCase().includes(search))
-);
-
-});
-
-}
-
-/* =========================================
-   TABLE
-========================================= */
-
-function renderTable(){
-
-const data=filtered();
-
-let html=`
 
 <table style="
 width:100%;
 border-collapse:collapse;
 font-size:11px;
+background:#f8eed1;
+color:#2b1a0a;
 ">
 
+/* =========================================
+   ZMIEŃ HEADER tabeli
+========================================= */
+
 <tr style="
-background:#111;
+background:#7a5b2e;
+color:#f4e4bc;
 position:sticky;
 top:0;
 z-index:5;
 ">
 
-<th id="sort_player"
-style="cursor:pointer">
-PLAYER
-</th>
+/* =========================================
+   DODAJ po load allies
+========================================= */
 
-<th>COORD</th>
+detectDiplomacy();
 
-<th id="sort_dist"
-style="cursor:pointer">
-DIST
-</th>
-
-<th id="sort_points"
-style="cursor:pointer">
-PTS
-</th>
-
-<th>ALLY</th>
-
-<th>STATUS</th>
-
-<th>ACTION</th>
-
-</tr>
-`;
-
-data.forEach(v=>{
-
-const p=players[v.playerId];
-
-const ally=
-allies[p?.ally];
-
-const isBarb=!p;
-
-const known=
-!!knownBarbs[v.id];
+/* =========================================
+   ZMIEŃ bg logic
+========================================= */
 
 let bg='';
 
 if(isBarb){
 
-bg=known
-?'rgba(255,255,0,.10)'
-:'rgba(0,255,0,.10)';
+bg=analysis?.known
+?'rgba(210,180,80,.35)'
+:'rgba(80,180,80,.25)';
 
 }else{
 
-bg='rgba(255,0,0,.06)';
+bg='rgba(120,60,60,.10)';
 
 }
-
-let status='';
-
-if(isBarb){
-
-status=known
-?'🟡 KNOWN'
-:'🟢 NEW';
-
-}
-
-html+=`
-
-<tr style="
-border-bottom:1px solid #333;
-background:${bg};
-">
-
-<td>
-${p?p.name:'BARB'}
-</td>
-
-<td>
-
-<a
-href="/game.php?village=${game_data.village.id}&screen=map#${v.x};${v.y}"
-target="_blank"
-style="color:#6cf"
-onclick="
-if(!${!p}){
-return true;
-}
-TWMPRO_TOGGLE_BARB('${v.id}');
-">
-
-${v.x}|${v.y}
-
-</a>
-
-</td>
-
-<td>
-${v.distance.toFixed(1)}
-</td>
-
-<td>
-${v.points}
-</td>
-
-<td>
-${ally?ally.tag:''}
-</td>
-
-<td>
-${status}
-</td>
-
-<td>
-
-${
-isBarb
-?`
-<button
-onclick="
-TWMPRO_TOGGLE_BARB('${v.id}')
-">
-${known?'UNMARK':'MARK'}
-</button>
-`
-:`
--
-`
-}
-
-</td>
-
-</tr>
-`;
-
-});
-
-html+=`</table>`;
-
-document.querySelector('#tw_table')
-.innerHTML=html;
 
 /* =====================================
-   SORT EVENTS
+   MY TRIBE
 ===================================== */
 
-document.querySelector('#sort_dist')
-.onclick=()=>{
+if(
+p &&
+p.ally &&
+p.ally===myTribe
+){
 
-villages.sort(
-(a,b)=>a.distance-b.distance
-);
+bg='rgba(80,120,255,.20)';
 
-renderTable();
+}
 
-};
+/* =====================================
+   ALLY
+===================================== */
 
-document.querySelector('#sort_points')
-.onclick=()=>{
+if(
+p &&
+allyTags.includes(p.ally)
+){
 
-villages.sort(
-(a,b)=>b.points-a.points
-);
-
-renderTable();
-
-};
-
-document.querySelector('#sort_player')
-.onclick=()=>{
-
-villages.sort((a,b)=>{
-
-const pa=
-players[a.playerId]?.name||'BARB';
-
-const pb=
-players[b.playerId]?.name||'BARB';
-
-return pa.localeCompare(pb);
-
-});
-
-renderTable();
-
-};
+bg='rgba(160,120,255,.18)';
 
 }
 
 /* =========================================
-   EVENTS
+   STATUS tribe
+========================================= */
+
+let relation='';
+
+if(
+p &&
+p.ally===myTribe
+){
+
+relation='🛡 TRIBE';
+
+}else if(
+p &&
+allyTags.includes(p.ally)
+){
+
+relation='🤝 ALLY';
+
+}
+
+/* =========================================
+   DODAJ nową kolumnę
+========================================= */
+
+<th>RELATION</th>
+
+/* =========================================
+   DODAJ do row
+========================================= */
+
+<td>
+${relation}
+</td>
+
+/* =========================================
+   FILTER tribe
+========================================= */
+
+if(
+!cfg.showTribe &&
+p &&
+p.ally===myTribe
+){
+return false;
+}
+
+if(
+!cfg.showAlly &&
+p &&
+allyTags.includes(p.ally)
+){
+return false;
+}
+
+/* =========================================
+   EVENT tribe
 ========================================= */
 
 addListener(
-document.querySelector('#tw_scan'),
-'click',
-loadMap
-);
-
-addListener(
-document.querySelector('#tw_search'),
-'input',
-renderTable
-);
-
-addListener(
-document.querySelector('#tw_barbs'),
+document.querySelector('#tw_tribe'),
 'change',
 e=>{
 
-cfg.showBarbs=e.target.checked;
+cfg.showTribe=e.target.checked;
+
 save();
-renderTable();
 
-}
-);
-
-addListener(
-document.querySelector('#tw_players'),
-'change',
-e=>{
-
-cfg.showPlayers=e.target.checked;
-save();
-renderTable();
-
-}
-);
-
-addListener(
-document.querySelector('#tw_known'),
-'change',
-e=>{
-
-cfg.showKnown=e.target.checked;
-save();
-renderTable();
-
-}
-);
-
-addListener(
-document.querySelector('#tw_unknown'),
-'change',
-e=>{
-
-cfg.showUnknown=e.target.checked;
-save();
 renderTable();
 
 }
 );
 
 /* =========================================
-   DRAG
+   EVENT ally
 ========================================= */
 
-let drag=false;
-
-let offsetX=0;
-let offsetY=0;
-
 addListener(
-document.querySelector('#tw_header'),
-'mousedown',
+document.querySelector('#tw_ally'),
+'change',
 e=>{
 
-drag=true;
-
-offsetX=
-e.clientX-panel.offsetLeft;
-
-offsetY=
-e.clientY-panel.offsetTop;
-
-}
-);
-
-addListener(
-document,
-'mouseup',
-()=>{
-
-drag=false;
-
-cfg.panelX=panel.offsetLeft;
-cfg.panelY=panel.offsetTop;
-cfg.panelW=panel.offsetWidth;
-cfg.panelH=panel.offsetHeight;
+cfg.showAlly=e.target.checked;
 
 save();
 
-}
-);
-
-addListener(
-document,
-'mousemove',
-e=>{
-
-if(!drag)return;
-
-panel.style.left=
-e.clientX-offsetX+'px';
-
-panel.style.top=
-e.clientY-offsetY+'px';
+renderTable();
 
 }
 );
-
-/* =========================================
-   DESTROY
-========================================= */
-
-function destroy(){
-
-listeners.forEach(l=>{
-
-l.el.removeEventListener(
-l.type,
-l.fn
-);
-
-});
-
-panel.remove();
-
-delete window.TWMPRO_RUNNING;
-delete window.TWMPRO_DESTROY;
-delete window.TWMPRO_TOGGLE_BARB;
-
-}
-
-window.TWMPRO_DESTROY=destroy;
-
-addListener(
-document.querySelector('#tw_close'),
-'click',
-destroy
-);
-
-/* =========================================
-   INIT
-========================================= */
-
-setStatus(
-'Ready'
-);
-
-})();
