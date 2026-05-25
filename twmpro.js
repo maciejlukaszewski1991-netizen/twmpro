@@ -3,11 +3,12 @@
 'use strict';
 
 /* =========================================
-   TWMPRO v10 FINAL
+   TWMPRO v11 STABLE
+   FULL REBUILD
 ========================================= */
 
 /* =========================================
-   CLEAN START
+   CLEAN PREVIOUS
 ========================================= */
 
 if(window.TWMPRO_DESTROY){
@@ -20,9 +21,9 @@ window.TWMPRO_RUNNING=true;
    STORAGE
 ========================================= */
 
-const STORAGE='TWMPRO_V10';
-const BARB_CACHE='TWMPRO_BARBS_V10';
-const PLAYER_HISTORY='TWMPRO_HISTORY_V10';
+const STORAGE='TWMPRO_V11';
+const BARB_CACHE='TWMPRO_BARB_CACHE_V11';
+const PLAYER_HISTORY='TWMPRO_PLAYER_HISTORY_V11';
 
 /* =========================================
    CONFIG
@@ -43,9 +44,7 @@ showPlayers:true,
 showKnown:true,
 showUnknown:true,
 
-onlyUnknown:false,
-
-sort:'distance'
+onlyUnknown:false
 
 };
 
@@ -100,7 +99,11 @@ JSON.parse(
 localStorage.getItem(BARB_CACHE)||'{}'
 );
 
-}catch(e){}
+}catch(e){
+
+barbCache={};
+
+}
 
 try{
 
@@ -109,34 +112,24 @@ JSON.parse(
 localStorage.getItem(PLAYER_HISTORY)||'{}'
 );
 
-}catch(e){}
+}catch(e){
+
+playerHistory={};
+
+}
 
 /* =========================================
    HELPERS
 ========================================= */
 
-function saveBarbs(){
-
-localStorage.setItem(
-BARB_CACHE,
-JSON.stringify(barbCache)
-);
-
-}
-
-function saveHistory(){
-
-localStorage.setItem(
-PLAYER_HISTORY,
-JSON.stringify(playerHistory)
-);
-
-}
-
 function setStatus(txt){
 
-document.querySelector('#tw_status')
-.innerText=txt;
+const el=
+document.querySelector('#tw_status');
+
+if(el){
+el.innerText=txt;
+}
 
 }
 
@@ -162,6 +155,24 @@ y:+c[1]
 
 }
 
+function saveBarbs(){
+
+localStorage.setItem(
+BARB_CACHE,
+JSON.stringify(barbCache)
+);
+
+}
+
+function saveHistory(){
+
+localStorage.setItem(
+PLAYER_HISTORY,
+JSON.stringify(playerHistory)
+);
+
+}
+
 /* =========================================
    PANEL
 ========================================= */
@@ -170,24 +181,22 @@ const panel=document.createElement('div');
 
 panel.id='twmpro_panel';
 
-panel.style=`
-position:fixed;
-left:${cfg.panelX}px;
-top:${cfg.panelY}px;
-width:${cfg.panelW}px;
-height:${cfg.panelH}px;
-background:#f4e4bc;
-border:2px solid #7a5b2e;
-z-index:999999;
-display:flex;
-flex-direction:column;
-resize:both;
-overflow:hidden;
-font-family:Verdana;
-font-size:11px;
-border-radius:8px;
-box-shadow:0 0 12px rgba(0,0,0,.5);
-`;
+panel.style.position='fixed';
+panel.style.left=cfg.panelX+'px';
+panel.style.top=cfg.panelY+'px';
+panel.style.width=cfg.panelW+'px';
+panel.style.height=cfg.panelH+'px';
+panel.style.background='#f4e4bc';
+panel.style.border='2px solid #7a5b2e';
+panel.style.zIndex='999999';
+panel.style.display='flex';
+panel.style.flexDirection='column';
+panel.style.resize='both';
+panel.style.overflow='hidden';
+panel.style.fontFamily='Verdana';
+panel.style.fontSize='11px';
+panel.style.borderRadius='8px';
+panel.style.boxShadow='0 0 12px rgba(0,0,0,.5)';
 
 panel.innerHTML=`
 
@@ -198,20 +207,21 @@ background:#6b4d24;
 color:#f4e4bc;
 font-weight:bold;
 cursor:move;
+border-bottom:2px solid #3e2b14;
 ">
 
-TWMPRO v10 FINAL
+TWMPRO v11 STABLE
 
 </div>
 
 <div style="
 padding:6px;
 background:#e6d3a3;
-border-bottom:1px solid #7a5b2e;
 display:flex;
 gap:6px;
 flex-wrap:wrap;
 align-items:center;
+border-bottom:1px solid #7a5b2e;
 ">
 
 R
@@ -307,6 +317,8 @@ document.body.appendChild(panel);
 
 async function loadMap(){
 
+try{
+
 setStatus('Loading players');
 
 const playerTxt=
@@ -319,6 +331,8 @@ playerTxt
 .trim()
 .split('\n')
 .forEach(line=>{
+
+if(!line)return;
 
 const p=line.split(',');
 
@@ -349,9 +363,7 @@ points:+p[4]
 
 /* LIMIT */
 
-if(
-playerHistory[p[0]].length>20
-){
+if(playerHistory[p[0]].length>30){
 
 playerHistory[p[0]].shift();
 
@@ -386,6 +398,8 @@ allyTxt
 .trim()
 .split('\n')
 .forEach(line=>{
+
+if(!line)return;
 
 const a=line.split(',');
 
@@ -469,9 +483,7 @@ distance:d
 
 }
 
-/* =====================================
-   SORT NEAREST -> FARTHEST
-===================================== */
+/* SORT */
 
 villages.sort(
 (a,b)=>a.distance-b.distance
@@ -483,11 +495,17 @@ setStatus(
 
 renderTable();
 
-/* =====================================
-   START BARB SCAN
-===================================== */
+/* START BARB ANALYZE */
 
 scanBarbsQueue();
+
+}catch(e){
+
+console.error(e);
+
+setStatus('Load error');
+
+}
 
 }
 
@@ -508,15 +526,22 @@ villages
 .filter(v=>!v.playerId)
 .sort((a,b)=>a.distance-b.distance);
 
+/* =====================================
+   NEAREST FIRST
+===================================== */
+
 for(const barb of barbs){
 
-if(barbCache[barb.id])
+/* CACHE */
+
+if(barbCache[barb.id]){
 continue;
+}
 
 try{
 
 setStatus(
-'Checking barb '+barb.x+'|'+barb.y
+'Checking '+barb.x+'|'+barb.y
 );
 
 const url=
@@ -526,8 +551,36 @@ const html=
 await fetch(url)
 .then(r=>r.text());
 
-const known=
-html.includes('Ostatni atak');
+/* =====================================
+   LAST ATTACK PARSER
+===================================== */
+
+let known=false;
+
+/* DATA:
+25.05. 01:02
+*/
+
+const attackMatch=
+html.match(
+/Ostatni atak:[\s\S]*?(\d{1,2}\.\d{1,2}\.\s\d{1,2}:\d{2})/
+);
+
+if(attackMatch){
+
+known=true;
+
+}
+
+/* FALLBACK */
+
+if(
+html.includes('Własne rozkazy')
+){
+
+known=true;
+
+}
 
 barbCache[barb.id]={
 
@@ -540,10 +593,18 @@ saveBarbs();
 
 renderTable();
 
-}catch(e){}
+}catch(e){
+
+console.error(e);
+
+}
+
+/* =====================================
+   DELAY
+===================================== */
 
 await new Promise(r=>
-setTimeout(r,400)
+setTimeout(r,350)
 );
 
 }
@@ -558,7 +619,7 @@ setStatus('Barb scan finished');
    PLAYER ACTIVITY
 ========================================= */
 
-function playerActivity(playerId){
+function getPlayerActivity(playerId){
 
 const h=
 playerHistory[playerId];
@@ -566,10 +627,12 @@ playerHistory[playerId];
 if(!h || h.length<2){
 
 return{
+
 status:'UNKNOWN',
 d1:0,
 d2:0,
 d7:0
+
 };
 
 }
@@ -624,7 +687,7 @@ const barb=
 barbCache[v.id];
 
 const known=
-barb?.known;
+barb?.known===true;
 
 /* FILTERS */
 
@@ -646,6 +709,8 @@ if(cfg.onlyUnknown&&known)
 return false;
 
 }
+
+/* SEARCH */
 
 if(!search)return true;
 
@@ -704,9 +769,11 @@ const barb=
 barbCache[v.id];
 
 const known=
-barb?.known;
+barb?.known===true;
 
 let bg='#f8eed1';
+
+/* BARBS */
 
 if(isBarb){
 
@@ -715,6 +782,8 @@ bg=known
 :'#cfe6b8';
 
 }
+
+/* TRIBE */
 
 if(
 p &&
@@ -733,7 +802,7 @@ p.ally===myAlly
 
 const act=
 p
-?playerActivity(p.id)
+?getPlayerActivity(p.id)
 :null;
 
 html+=`
@@ -782,7 +851,7 @@ ${
 act
 ?`
 ${act.status}<br>
-24h: ${act.d1}
+Δ ${act.d1}
 `
 :''
 }
