@@ -3,20 +3,19 @@
 'use strict';
 
 /* =========================================
-   TWMPRO v17 STABLE MAP EDITION
+   TWMPRO v18 STABLE
+   CLEAN + FIXED
 ========================================= */
 
 /* =========================================
-   ONLY MAP
+   MAP ONLY
 ========================================= */
 
-if(
-    game_data.screen!=='map'
-){
+if(game_data.screen!=='map'){
 
     UI.InfoMessage(
-        'TWMPRO działa tylko na mapie',
-        5000,
+        'Uruchom skrypt na mapie',
+        4000,
         'error'
     );
 
@@ -48,8 +47,8 @@ const TWM=window.TWMPRO;
    STORAGE
 ========================================= */
 
-const CONFIG_KEY='TWMPRO_V17_CONFIG';
-const KNOWN_KEY='TWMPRO_V17_KNOWN';
+const CFG_KEY='TWMPRO_V18_CFG';
+const KNOWN_KEY='TWMPRO_V18_KNOWN';
 
 /* =========================================
    CONFIG
@@ -59,10 +58,10 @@ const defaults={
 
     radius:25,
 
+    minimized:false,
+
     panelX:120,
     panelY:40,
-
-    minimized:false,
 
     autoRefresh:true,
 
@@ -79,16 +78,16 @@ const defaults={
 
 };
 
-TWM.cfg=loadConfig();
+TWM.cfg=loadCfg();
 
-function loadConfig(){
+function loadCfg(){
 
     try{
 
         return{
             ...defaults,
             ...JSON.parse(
-                localStorage.getItem(CONFIG_KEY)||'{}'
+                localStorage.getItem(CFG_KEY)||'{}'
             )
         };
 
@@ -100,17 +99,17 @@ function loadConfig(){
 
 }
 
-function saveConfig(){
+function saveCfg(){
 
     localStorage.setItem(
-        CONFIG_KEY,
+        CFG_KEY,
         JSON.stringify(TWM.cfg)
     );
 
 }
 
 /* =========================================
-   KNOWN BARBS
+   KNOWN
 ========================================= */
 
 try{
@@ -139,11 +138,12 @@ function saveKnown(){
    DATA
 ========================================= */
 
-TWM.villages=[];
 TWM.players={};
 TWM.allies={};
+TWM.villages=[];
 
 TWM.loading=false;
+
 TWM.timer=null;
 
 /* =========================================
@@ -163,15 +163,6 @@ function setStatus(txt){
 
 }
 
-function dist(x1,y1,x2,y2){
-
-    return Math.sqrt(
-        Math.pow(x2-x1,2)+
-        Math.pow(y2-y1,2)
-    );
-
-}
-
 function coord(){
 
     const c=
@@ -187,40 +178,51 @@ function coord(){
 
 }
 
+function dist(x1,y1,x2,y2){
+
+    return Math.sqrt(
+
+        Math.pow(x2-x1,2)+
+        Math.pow(y2-y1,2)
+
+    );
+
+}
+
 /* =========================================
-   FLOAT BUTTON
+   FLOAT
 ========================================= */
 
-const btn=
+const floatBtn=
 document.createElement('div');
 
-btn.innerHTML='⚔';
+floatBtn.innerHTML='⚔';
 
-btn.style.position='fixed';
-btn.style.right='10px';
-btn.style.bottom='10px';
+floatBtn.style.position='fixed';
+floatBtn.style.right='10px';
+floatBtn.style.bottom='10px';
 
-btn.style.width='42px';
-btn.style.height='42px';
+floatBtn.style.width='42px';
+floatBtn.style.height='42px';
 
-btn.style.borderRadius='50%';
+floatBtn.style.background='#6b4d24';
+floatBtn.style.color='#fff';
 
-btn.style.background='#6b4d24';
-btn.style.color='#fff';
+floatBtn.style.borderRadius='50%';
 
-btn.style.display='flex';
-btn.style.alignItems='center';
-btn.style.justifyContent='center';
+floatBtn.style.display='flex';
+floatBtn.style.alignItems='center';
+floatBtn.style.justifyContent='center';
 
-btn.style.cursor='pointer';
+floatBtn.style.cursor='pointer';
 
-btn.style.zIndex='999999';
+floatBtn.style.zIndex='999999';
 
-btn.style.fontSize='20px';
+floatBtn.style.fontSize='20px';
 
-btn.style.boxShadow='0 0 10px rgba(0,0,0,.5)';
+floatBtn.style.boxShadow='0 0 10px rgba(0,0,0,.5)';
 
-document.body.appendChild(btn);
+document.body.appendChild(floatBtn);
 
 /* =========================================
    PANEL
@@ -228,8 +230,6 @@ document.body.appendChild(btn);
 
 const panel=
 document.createElement('div');
-
-panel.id='twm_panel';
 
 panel.style.position='fixed';
 
@@ -260,7 +260,6 @@ panel.style.resize='both';
 panel.style.overflow='hidden';
 
 panel.style.fontFamily='Verdana';
-
 panel.style.fontSize='11px';
 
 panel.style.borderRadius='8px';
@@ -282,7 +281,7 @@ cursor:move;
 ">
 
 <div>
-TWMPRO v17
+TWMPRO v18
 </div>
 
 <div>
@@ -322,7 +321,7 @@ SCAN
 </button>
 
 <button id="twm_import">
-IMPORT PLACE
+IMPORT
 </button>
 
 <input
@@ -437,7 +436,7 @@ background:#f8eed1;
 document.body.appendChild(panel);
 
 /* =========================================
-   OPEN / CLOSE
+   OPEN CLOSE
 ========================================= */
 
 TWM.open=()=>{
@@ -446,7 +445,7 @@ TWM.open=()=>{
 
     TWM.cfg.minimized=false;
 
-    saveConfig();
+    saveCfg();
 
 };
 
@@ -456,15 +455,13 @@ TWM.close=()=>{
 
     TWM.cfg.minimized=true;
 
-    saveConfig();
+    saveCfg();
 
 };
 
-btn.onclick=()=>{
+floatBtn.onclick=()=>{
 
-    if(
-        panel.style.display==='none'
-    ){
+    if(panel.style.display==='none'){
 
         TWM.open();
 
@@ -481,7 +478,7 @@ document
 .onclick=TWM.close;
 
 /* =========================================
-   LOAD MAP
+   LOAD
 ========================================= */
 
 TWM.load=async()=>{
@@ -492,31 +489,31 @@ TWM.load=async()=>{
 
     try{
 
-        setStatus('Loading...');
+        setStatus('Loading players');
 
         /* PLAYERS */
 
-        const playerTxt=
+        const playersTxt=
         await fetch('/map/player.txt')
         .then(r=>r.text());
 
         TWM.players={};
 
-        playerTxt
+        playersTxt
         .trim()
         .split('\n')
         .forEach(line=>{
 
             if(!line)return;
 
-            const p=
-            line.split(',');
+            const p=line.split(',');
 
             TWM.players[p[0]]={
 
                 id:p[0],
                 name:p[1],
                 ally:p[2],
+
                 points:+p[4]
 
             };
@@ -524,6 +521,8 @@ TWM.load=async()=>{
         });
 
         /* ALLIES */
+
+        setStatus('Loading allies');
 
         const allyTxt=
         await fetch('/map/ally.txt')
@@ -538,8 +537,7 @@ TWM.load=async()=>{
 
             if(!line)return;
 
-            const a=
-            line.split(',');
+            const a=line.split(',');
 
             TWM.allies[a[0]]={
 
@@ -550,6 +548,8 @@ TWM.load=async()=>{
         });
 
         /* VILLAGES */
+
+        setStatus('Loading villages');
 
         const villageTxt=
         await fetch('/map/village.txt')
@@ -572,8 +572,7 @@ TWM.load=async()=>{
 
             if(!line)continue;
 
-            const v=
-            line.split(',');
+            const v=line.split(',');
 
             const x=+v[2];
             const y=+v[3];
@@ -618,9 +617,7 @@ TWM.load=async()=>{
 
         console.error(e);
 
-        setStatus(
-            'Load error'
-        );
+        setStatus('Load error');
 
     }
 
@@ -629,73 +626,102 @@ TWM.load=async()=>{
 };
 
 /* =========================================
-   IMPORT PLACE
+   IMPORT
 ========================================= */
 
-TWM.importPlace=async()=>{
+TWM.import=async()=>{
 
     try{
 
-        setStatus(
-            'Importing place...'
-        );
+        setStatus('Importing...');
 
-        const html=
-        await fetch(
+        const pages=[
 
             '/game.php?village='+
             game_data.village.id+
-            '&screen=place&mode=units'
+            '&screen=place&mode=units',
 
-        ).then(r=>r.text());
+            '/game.php?village='+
+            game_data.village.id+
+            '&screen=am_farm',
 
-        const parser=
-        new DOMParser();
+            '/game.php?village='+
+            game_data.village.id+
+            '&screen=report'
 
-        const doc=
-        parser.parseFromString(
-            html,
-            'text/html'
-        );
-
-        const links=
-        [...doc.querySelectorAll('a')];
+        ];
 
         let imported=0;
 
-        links.forEach(a=>{
+        for(const url of pages){
 
-            const href=
-            a.href||'';
+            try{
 
-            if(
-                href.includes('target=')
-            ){
+                const html=
+                await fetch(url)
+                .then(r=>r.text());
 
-                const m=
-                href.match(
-                    /target=(\d+)/
+                const parser=
+                new DOMParser();
+
+                const doc=
+                parser.parseFromString(
+                    html,
+                    'text/html'
                 );
 
-                if(m){
+                const links=
+                [
+                    ...doc.querySelectorAll('a')
+                ];
 
-                    const id=m[1];
+                links.forEach(a=>{
+
+                    const href=
+                    a.href||'';
+
+                    /*
+                       REAL TARGET DETECTION
+                    */
 
                     if(
-                        !TWM.known[id]
+                        href.includes(
+                            'screen=info_village'
+                        )
                     ){
 
-                        TWM.known[id]=true;
+                        const m=
+                        href.match(
+                            /id=(\d+)/
+                        );
 
-                        imported++;
+                        if(m){
+
+                            const id=m[1];
+
+                            if(
+                                !TWM.known[id]
+                            ){
+
+                                TWM.known[id]=true;
+
+                                imported++;
+
+                            }
+
+                        }
 
                     }
 
-                }
+                });
+
+            }catch(e){
+
+                console.error(e);
 
             }
 
-        });
+        }
 
         saveKnown();
 
@@ -709,9 +735,7 @@ TWM.importPlace=async()=>{
 
         console.error(e);
 
-        setStatus(
-            'Import error'
-        );
+        setStatus('Import error');
 
     }
 
@@ -733,8 +757,14 @@ e=>{
     const href=
     a.href||'';
 
+    /*
+       SEND TROOPS
+    */
+
     if(
-        href.includes('target=')
+        href.includes(
+            'screen=place'
+        )
     ){
 
         const m=
@@ -757,7 +787,7 @@ e=>{
 });
 
 /* =========================================
-   FILTER + SORT
+   FILTER SORT
 ========================================= */
 
 function getData(){
@@ -856,9 +886,7 @@ function getData(){
         const pb=
         TWM.players[b.playerId];
 
-        switch(
-            TWM.cfg.sort
-        ){
+        switch(TWM.cfg.sort){
 
             case 'distance':
 
@@ -1085,7 +1113,7 @@ document
 
 document
 .querySelector('#twm_import')
-.onclick=TWM.importPlace;
+.onclick=TWM.import;
 
 document
 .querySelector('#twm_search')
@@ -1098,7 +1126,7 @@ document
     TWM.cfg.sort=
     e.target.value;
 
-    saveConfig();
+    saveCfg();
 
     render();
 
@@ -1111,7 +1139,7 @@ document
     TWM.cfg.dir=
     e.target.value;
 
-    saveConfig();
+    saveCfg();
 
     render();
 
@@ -1149,7 +1177,7 @@ document
             map[id]
         ]=e.target.checked;
 
-        saveConfig();
+        saveCfg();
 
         startRefresh();
 
@@ -1201,7 +1229,7 @@ document.onmousemove=e=>{
 };
 
 /* =========================================
-   DESTROY
+   CLOSE
 ========================================= */
 
 document
@@ -1218,7 +1246,7 @@ document
 
     panel.remove();
 
-    btn.remove();
+    floatBtn.remove();
 
     delete window.TWMPRO;
 
