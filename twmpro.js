@@ -3,7 +3,7 @@
 'use strict';
 
 /* =========================================
-   TWMPRO v13 FINAL STABLE
+   TWMPRO v14 ULTIMATE
 ========================================= */
 
 /* =========================================
@@ -20,9 +20,9 @@ window.TWMPRO_RUNNING=true;
    STORAGE
 ========================================= */
 
-const STORAGE='TWMPRO_V13';
-const BARB_CACHE='TWMPRO_BARB_CACHE_V13';
-const PLAYER_HISTORY='TWMPRO_PLAYER_HISTORY_V13';
+const STORAGE='TWMPRO_V14_CONFIG';
+const KNOWN_STORAGE='TWMPRO_V14_KNOWN';
+const PLAYER_HISTORY='TWMPRO_V14_HISTORY';
 
 /* =========================================
    CONFIG
@@ -32,11 +32,13 @@ const defaults={
 
     radius:25,
 
-    panelX:80,
+    panelX:120,
     panelY:40,
 
     panelW:1050,
     panelH:650,
+
+    minimized:false,
 
     showBarbs:true,
     showPlayers:true,
@@ -88,19 +90,20 @@ let allies={};
 
 let myAlly='';
 
-let barbCache={};
+let knownBarbs={};
+
 let playerHistory={};
 
 try{
 
-    barbCache=
+    knownBarbs=
     JSON.parse(
-        localStorage.getItem(BARB_CACHE)||'{}'
+        localStorage.getItem(KNOWN_STORAGE)||'{}'
     );
 
 }catch(e){
 
-    barbCache={};
+    knownBarbs={};
 
 }
 
@@ -121,22 +124,11 @@ try{
    HELPERS
 ========================================= */
 
-function setStatus(txt){
-
-    const el=
-    document.querySelector('#tw_status');
-
-    if(el){
-        el.innerText=txt;
-    }
-
-}
-
-function saveBarbs(){
+function saveKnown(){
 
     localStorage.setItem(
-        BARB_CACHE,
-        JSON.stringify(barbCache)
+        KNOWN_STORAGE,
+        JSON.stringify(knownBarbs)
     );
 
 }
@@ -147,6 +139,17 @@ function saveHistory(){
         PLAYER_HISTORY,
         JSON.stringify(playerHistory)
     );
+
+}
+
+function setStatus(txt){
+
+    const el=
+    document.querySelector('#tw_status');
+
+    if(el){
+        el.innerText=txt;
+    }
 
 }
 
@@ -172,6 +175,43 @@ function currentCoord(){
 }
 
 /* =========================================
+   FLOAT BUTTON
+========================================= */
+
+const floatBtn=
+document.createElement('div');
+
+floatBtn.id='twmpro_float';
+
+floatBtn.innerHTML='⚔';
+
+floatBtn.style.position='fixed';
+floatBtn.style.right='10px';
+floatBtn.style.bottom='10px';
+
+floatBtn.style.width='42px';
+floatBtn.style.height='42px';
+
+floatBtn.style.background='#6b4d24';
+floatBtn.style.color='#fff';
+
+floatBtn.style.borderRadius='50%';
+
+floatBtn.style.display='flex';
+floatBtn.style.alignItems='center';
+floatBtn.style.justifyContent='center';
+
+floatBtn.style.cursor='pointer';
+
+floatBtn.style.zIndex='999999';
+
+floatBtn.style.fontSize='20px';
+
+floatBtn.style.boxShadow='0 0 10px rgba(0,0,0,.5)';
+
+document.body.appendChild(floatBtn);
+
+/* =========================================
    PANEL
 ========================================= */
 
@@ -189,9 +229,13 @@ panel.style.height=cfg.panelH+'px';
 panel.style.background='#f4e4bc';
 panel.style.border='2px solid #7a5b2e';
 
-panel.style.zIndex='999999';
+panel.style.zIndex='999998';
 
-panel.style.display='flex';
+panel.style.display=
+cfg.minimized
+?'none'
+:'flex';
+
 panel.style.flexDirection='column';
 
 panel.style.resize='both';
@@ -214,9 +258,20 @@ color:#f4e4bc;
 font-weight:bold;
 cursor:move;
 border-bottom:2px solid #3e2b14;
+display:flex;
+justify-content:space-between;
+align-items:center;
 ">
 
-TWMPRO v13 FINAL
+<span>TWMPRO v14</span>
+
+<div>
+
+<button id="tw_minimize">_</button>
+
+<button id="tw_close">X</button>
+
+</div>
 
 </div>
 
@@ -242,8 +297,8 @@ style="width:50px">
 SCAN
 </button>
 
-<button id="tw_close">
-X
+<button id="tw_import_af">
+IMPORT AF
 </button>
 
 <input
@@ -318,6 +373,48 @@ background:#f8eed1;
 document.body.appendChild(panel);
 
 /* =========================================
+   MINIMIZE
+========================================= */
+
+function minimize(){
+
+    panel.style.display='none';
+
+    cfg.minimized=true;
+
+    saveConfig();
+
+}
+
+function maximize(){
+
+    panel.style.display='flex';
+
+    cfg.minimized=false;
+
+    saveConfig();
+
+}
+
+document
+.querySelector('#tw_minimize')
+.onclick=minimize;
+
+floatBtn.onclick=()=>{
+
+    if(panel.style.display==='none'){
+
+        maximize();
+
+    }else{
+
+        minimize();
+
+    }
+
+};
+
+/* =========================================
    LOAD MAP
 ========================================= */
 
@@ -379,8 +476,6 @@ async function loadMap(){
         });
 
         saveHistory();
-
-        /* MY ALLY */
 
         const me=
         players[game_data.player.id];
@@ -469,8 +564,6 @@ async function loadMap(){
                 y
             );
 
-            /* ONLY RADIUS */
-
             if(d>radius)continue;
 
             villages.push({
@@ -491,8 +584,6 @@ async function loadMap(){
 
         }
 
-        /* SORT NEAREST FIRST */
-
         villages.sort(
             (a,b)=>a.distance-b.distance
         );
@@ -502,10 +593,6 @@ async function loadMap(){
         );
 
         renderTable();
-
-        /* START BARB SCAN */
-
-        scanBarbsQueue();
 
     }catch(e){
 
@@ -518,105 +605,101 @@ async function loadMap(){
 }
 
 /* =========================================
-   BARB SCANNER
+   AUTO TRACKING
 ========================================= */
 
-let scanning=false;
+document.addEventListener(
+'click',
+e=>{
 
-async function scanBarbsQueue(){
+    const a=
+    e.target.closest('a');
 
-    if(scanning)return;
+    if(!a)return;
 
-    scanning=true;
+    const href=
+    a.href||'';
 
-    const barbs=
-    villages
-    .filter(v=>!v.playerId)
-    .sort((a,b)=>a.distance-b.distance);
+    /* =====================================
+       SEND TROOPS
+    ===================================== */
 
-    for(const barb of barbs){
+    if(
+        href.includes('screen=place')
+    ){
 
-        /* CACHE */
+        const match=
+        href.match(/target=(\d+)/);
 
-        if(barbCache[barb.id]){
-            continue;
-        }
+        if(match){
 
-        try{
+            knownBarbs[
+                match[1]
+            ]=true;
 
-            setStatus(
-                'Checking '+barb.x+'|'+barb.y
-            );
-
-            const url=
-            `/game.php?village=${game_data.village.id}&screen=info_village&id=${barb.id}`;
-
-            const html=
-            await fetch(url)
-            .then(r=>r.text());
-
-            /* =====================================
-               REAL FARM DETECTION
-            ===================================== */
-
-            let known=false;
-
-            /*
-               KNOWN BARB:
-               has reports/history
-
-               Examples:
-               "atakuje Wioska barbarzyńska"
-               "szpieguje Wioska barbarzyńska"
-               "Własne rozkazy"
-            */
-
-            if(
-
-                html.includes('atakuje Wioska barbarzyńska')
-
-                ||
-
-                html.includes('szpieguje Wioska barbarzyńska')
-
-                ||
-
-                html.includes('Własne rozkazy')
-
-            ){
-
-                known=true;
-
-            }
-
-            barbCache[barb.id]={
-
-                known,
-                time:Date.now()
-
-            };
-
-            saveBarbs();
+            saveKnown();
 
             renderTable();
 
-        }catch(e){
-
-            console.error(e);
-
         }
-
-        /* DELAY */
-
-        await new Promise(r=>
-            setTimeout(r,350)
-        );
 
     }
 
-    scanning=false;
+});
 
-    setStatus('Barb scan finished');
+/* =========================================
+   IMPORT AF
+========================================= */
+
+async function importAF(){
+
+    try{
+
+        setStatus('Importing AF');
+
+        const html=
+        await fetch(
+            '/game.php?village='+game_data.village.id+'&screen=am_farm'
+        ).then(r=>r.text());
+
+        /* =====================================
+           FIND TARGET IDS
+        ===================================== */
+
+        const matches=
+        [...html.matchAll(/target=(\d+)/g)];
+
+        let imported=0;
+
+        matches.forEach(m=>{
+
+            const id=m[1];
+
+            if(!knownBarbs[id]){
+
+                knownBarbs[id]=true;
+
+                imported++;
+
+            }
+
+        });
+
+        saveKnown();
+
+        renderTable();
+
+        setStatus(
+            'Imported '+imported+' AF villages'
+        );
+
+    }catch(e){
+
+        console.error(e);
+
+        setStatus('AF import error');
+
+    }
 
 }
 
@@ -634,10 +717,7 @@ function getPlayerActivity(playerId){
         return{
 
             status:'UNKNOWN',
-
-            d1:0,
-            d2:0,
-            d7:0
+            d1:0
 
         };
 
@@ -663,10 +743,7 @@ function getPlayerActivity(playerId){
     return{
 
         status,
-
-        d1:diff,
-        d2:diff,
-        d7:diff
+        d1:diff
 
     };
 
@@ -691,13 +768,8 @@ function filtered(){
 
         const isBarb=!p;
 
-        const barb=
-        barbCache[v.id];
-
         const known=
-        barb?.known===true;
-
-        /* BARB FILTERS */
+        knownBarbs[v.id]===true;
 
         if(isBarb&&!cfg.showBarbs)
         return false;
@@ -729,8 +801,6 @@ function filtered(){
             }
 
         }
-
-        /* SEARCH */
 
         if(!search)
         return true;
@@ -801,15 +871,10 @@ z-index:5;
 
         const isBarb=!p;
 
-        const barb=
-        barbCache[v.id];
-
         const known=
-        barb?.known===true;
+        knownBarbs[v.id]===true;
 
         let bg='#f8eed1';
-
-        /* BARB COLORS */
 
         if(isBarb){
 
@@ -818,8 +883,6 @@ z-index:5;
             :'#cfe6b8';
 
         }
-
-        /* MY TRIBE */
 
         if(
             p &&
@@ -859,7 +922,10 @@ ${p?p.name:'BARB'}
 <a
 href="/game.php?village=${game_data.village.id}&screen=map#${v.x};${v.y}"
 target="_blank"
-style="color:#0044cc;font-weight:bold;">
+style="
+color:#0044cc;
+font-weight:bold;
+">
 
 ${v.x}|${v.y}
 
@@ -947,6 +1013,10 @@ known
 document
 .querySelector('#tw_scan')
 .onclick=loadMap;
+
+document
+.querySelector('#tw_import_af')
+.onclick=importAF;
 
 document
 .querySelector('#tw_search')
@@ -1042,6 +1112,8 @@ document.onmousemove=e=>{
 function destroy(){
 
     panel.remove();
+
+    floatBtn.remove();
 
     delete window.TWMPRO_RUNNING;
     delete window.TWMPRO_DESTROY;
