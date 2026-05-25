@@ -1,6 +1,6 @@
 /* =========================================================
-   TWMPRO AI CORE v27
-   FULL MERGED BUILD
+   TWMPRO AI CORE v28 STABLE
+   FULL BUGFIX BUILD
 ========================================================= */
 
 (async()=>{
@@ -11,10 +11,13 @@
    MAP CHECK
 ========================================================= */
 
-if(game_data.screen!=='map'){
+if(
+    typeof game_data==='undefined' ||
+    game_data.screen!=='map'
+){
 
     UI.InfoMessage(
-        'Uruchom na mapie',
+        'Uruchom skrypt na mapie',
         3000,
         'error'
     );
@@ -27,11 +30,11 @@ if(game_data.screen!=='map'){
    SINGLE INSTANCE
 ========================================================= */
 
-if(window.TWMAI_V27){
+if(window.TWMAI_V28){
 
     try{
 
-        window.TWMAI_V27.open();
+        window.TWMAI_V28.open();
 
     }catch(e){}
 
@@ -43,9 +46,9 @@ if(window.TWMAI_V27){
    ROOT
 ========================================================= */
 
-window.TWMAI_V27={};
+window.TWMAI_V28={};
 
-const TWM=window.TWMAI_V27;
+const TWM=window.TWMAI_V28;
 
 /* =========================================================
    CONFIG
@@ -61,7 +64,11 @@ TWM.config={
 
     minWidth:700,
 
-    minHeight:420
+    minHeight:420,
+
+    radius:60,
+
+    storage:'TWMPRO_AI_V28'
 
 };
 
@@ -77,11 +84,15 @@ TWM.state={
 
     autoRefresh:null,
 
+    drag:false,
+
     players:{},
 
     allies:{},
 
     villages:[],
+
+    visibleVillages:[],
 
     reports:[],
 
@@ -99,9 +110,75 @@ TWM.state={
 
     predictions:[],
 
-    knownCoords:{}
+    knownCoords:{},
+
+    relations:{},
+
+    playerHeat:{},
+
+    growth:{},
+
+    listeners:[]
 
 };
+
+/* =========================================================
+   STORAGE
+========================================================= */
+
+TWM.Storage={};
+
+TWM.Storage.load=()=>{
+
+    try{
+
+        const raw=
+        localStorage.getItem(
+            TWM.config.storage
+        );
+
+        if(!raw)return;
+
+        const data=
+        JSON.parse(raw);
+
+        TWM.state.knownCoords=
+        data.knownCoords||{};
+
+    }catch(e){
+
+        console.error(e);
+
+    }
+
+};
+
+TWM.Storage.save=()=>{
+
+    try{
+
+        localStorage.setItem(
+
+            TWM.config.storage,
+
+            JSON.stringify({
+
+                knownCoords:
+                TWM.state.knownCoords
+
+            })
+
+        );
+
+    }catch(e){
+
+        console.error(e);
+
+    }
+
+};
+
+TWM.Storage.load();
 
 /* =========================================================
    HELPERS
@@ -110,6 +187,15 @@ TWM.state={
 TWM.Helpers={};
 
 TWM.Helpers.coord=(txt)=>{
+
+    if(!txt){
+
+        return{
+            x:0,
+            y:0
+        };
+
+    }
 
     const c=txt.split('|');
 
@@ -150,6 +236,25 @@ TWM.Helpers.status=(txt)=>{
 
 };
 
+TWM.Helpers.safe=
+async(fn,name)=>{
+
+    try{
+
+        await fn();
+
+    }catch(e){
+
+        console.error(
+            '[AI MODULE ERROR]',
+            name,
+            e
+        );
+
+    }
+
+};
+
 /* =========================================================
    UI
 ========================================================= */
@@ -157,7 +262,7 @@ TWM.Helpers.status=(txt)=>{
 TWM.UI={};
 
 /* =========================================================
-   FLOAT
+   FLOAT BUTTON
 ========================================================= */
 
 TWM.UI.float=
@@ -195,7 +300,10 @@ Object.assign(
 
         zIndex:'999999',
 
-        fontSize:'22px'
+        fontSize:'22px',
+
+        boxShadow:
+        '0 0 10px rgba(0,0,0,0.4)'
 
     }
 
@@ -275,22 +383,14 @@ font-weight:bold;
 ">
 
 <div>
-🧠 TWMPRO AI CORE v27
+🧠 TWMPRO AI CORE v28
 </div>
 
 <div style="display:flex;gap:4px;">
 
-<button id="twm_full">
-🗖
-</button>
-
-<button id="twm_min">
-—
-</button>
-
-<button id="twm_close">
-X
-</button>
+<button id="twm_full">🗖</button>
+<button id="twm_min">—</button>
+<button id="twm_close">X</button>
 
 </div>
 
@@ -368,13 +468,13 @@ $('#twm_header').on('mousedown',e=>{
 
 });
 
-$(document).on('mouseup',()=>{
+$(document).on('mouseup.twm',()=>{
 
     drag=false;
 
 });
 
-$(document).on('mousemove',e=>{
+$(document).on('mousemove.twm',e=>{
 
     if(!drag)return;
 
@@ -416,11 +516,15 @@ $('#twm_close').on('click',()=>{
         TWM.state.autoRefresh
     );
 
+    $(document).off('.twm');
+
+    TWM.Storage.save();
+
     TWM.UI.panel.remove();
 
     TWM.UI.float.remove();
 
-    delete window.TWMAI_V27;
+    delete window.TWMAI_V28;
 
 });
 
@@ -476,7 +580,9 @@ async()=>{
 
             danger:0,
 
-            loot24h:0
+            loot24h:0,
+
+            heat:0
 
         };
 
@@ -523,6 +629,97 @@ async()=>{
 };
 
 /* =========================================================
+   DIPLOMACY
+========================================================= */
+
+TWM.AI.scanDiplomacy=
+async()=>{
+
+    TWM.state.relations={};
+
+    try{
+
+        const html=
+        await fetch(
+
+            '/game.php?village='+
+            game_data.village.id+
+            '&screen=ally&mode=contracts'
+
+        ).then(r=>r.text());
+
+        const doc=
+        new DOMParser()
+        .parseFromString(
+            html,
+            'text/html'
+        );
+
+        doc.querySelectorAll(
+            'a[href*="info_ally"]'
+        ).forEach(a=>{
+
+            const href=
+            a.href||'';
+
+            const m=
+            href.match(/id=(\d+)/);
+
+            if(!m)return;
+
+            const id=m[1];
+
+            const row=
+            a.closest('tr');
+
+            if(!row)return;
+
+            const txt=
+            row.innerText
+            .toLowerCase();
+
+            let rel='neutral';
+
+            if(
+                txt.includes('sojusz') ||
+                txt.includes('federacja')
+            ){
+
+                rel='ally';
+
+            }
+
+            else if(
+                txt.includes('nap')
+            ){
+
+                rel='nap';
+
+            }
+
+            else if(
+                txt.includes('wojna')
+            ){
+
+                rel='enemy';
+
+            }
+
+            TWM.state.relations[
+                id
+            ]=rel;
+
+        });
+
+    }catch(e){
+
+        console.error(e);
+
+    }
+
+};
+
+/* =========================================================
    VILLAGES
 ========================================================= */
 
@@ -535,6 +732,11 @@ async()=>{
 
     TWM.state.villages=[];
 
+    const my=
+    TWM.Helpers.coord(
+        game_data.village.coord
+    );
+
     txt.trim()
     .split('\n')
     .forEach(line=>{
@@ -544,16 +746,38 @@ async()=>{
         const v=
         line.split(',');
 
+        const x=+v[2];
+        const y=+v[3];
+
+        const dist=
+        TWM.Helpers.distance(
+
+            my.x,
+            my.y,
+
+            x,
+            y
+
+        );
+
+        if(
+            dist>
+            TWM.config.radius
+        ){
+
+            return;
+
+        }
+
         TWM.state.villages.push({
 
             id:v[0],
 
-            x:+v[2],
-
-            y:+v[3],
+            x,
+            y,
 
             coord:
-            v[2]+'|'+v[3],
+            x+'|'+y,
 
             playerId:v[4],
 
@@ -565,7 +789,9 @@ async()=>{
 
             cluster:0,
 
-            targetScore:0
+            targetScore:0,
+
+            player:null
 
         });
 
@@ -593,6 +819,15 @@ TWM.AI.linkVillagePlayers=
     TWM.state.villages
     .forEach(v=>{
 
+        if(
+            !v.playerId ||
+            v.playerId==='0'
+        ){
+
+            return;
+
+        }
+
         v.player=
         TWM.state.players[
             v.playerId
@@ -615,6 +850,16 @@ TWM.AI.linkVillagePlayers=
         ){
 
             v.player.relation='ally';
+
+        }
+
+        else{
+
+            v.player.relation=
+
+                TWM.state.relations[
+                    v.player.ally
+                ]||'neutral';
 
         }
 
@@ -665,11 +910,8 @@ TWM.AI.scanFrontlines=
 
         });
 
-        if(enemy>=5){
-
-            v.frontline=true;
-
-        }
+        v.frontline=
+        enemy>=5;
 
         v.danger=
         enemy*10;
@@ -685,47 +927,52 @@ TWM.AI.scanFrontlines=
 TWM.AI.scanClusters=
 ()=>{
 
+    const grid={};
+
     TWM.state.villages
     .forEach(v=>{
 
-        let nearby=0;
+        const gx=
+        Math.floor(v.x/5);
 
-        TWM.state.villages
-        .forEach(o=>{
+        const gy=
+        Math.floor(v.y/5);
 
-            if(v===o)return;
+        const key=
+        gx+'_'+gy;
 
-            const dist=
-            TWM.Helpers.distance(
+        if(!grid[key]){
 
-                v.x,
-                v.y,
+            grid[key]=[];
 
-                o.x,
-                o.y
+        }
 
-            );
+        grid[key].push(v);
 
-            if(dist<=5){
+    });
 
-                nearby++;
+    Object.values(grid)
+    .forEach(list=>{
 
-            }
+        list.forEach(v=>{
+
+            v.cluster=
+            list.length;
 
         });
-
-        v.cluster=nearby;
 
     });
 
 };
 
 /* =========================================================
-   TARGET AI
+   TARGETS
 ========================================================= */
 
 TWM.AI.scanTargets=
 ()=>{
+
+    TWM.state.bestTargets=[];
 
     TWM.state.villages
     .forEach(v=>{
@@ -743,23 +990,39 @@ TWM.AI.scanTargets=
 
         }
 
+        if(
+            v.player.relation===
+            'neutral'
+        ){
+
+            score+=40;
+
+        }
+
         if(v.frontline){
 
             score+=50;
 
         }
 
-        score+=
-        v.cluster;
-
         if(v.points<5000){
 
-            score+=30;
+            score+=25;
 
         }
 
+        score+=
+        v.cluster;
+
         v.targetScore=
         Math.floor(score);
+
+        if(score>60){
+
+            TWM.state.bestTargets
+            .push(v);
+
+        }
 
     });
 
@@ -823,6 +1086,10 @@ TWM.AI.scanRegions=
         r.total=
         r.villages.length;
 
+        r.enemy=0;
+
+        r.danger=0;
+
         r.villages.forEach(v=>{
 
             if(
@@ -850,48 +1117,59 @@ TWM.AI.scanRegions=
 TWM.AI.scanReports=
 async()=>{
 
-    const html=
-    await fetch(
+    try{
 
-        '/game.php?village='+
-        game_data.village.id+
-        '&screen=report'
+        const html=
+        await fetch(
 
-    ).then(r=>r.text());
+            '/game.php?village='+
+            game_data.village.id+
+            '&screen=report'
 
-    const doc=
-    new DOMParser()
-    .parseFromString(
-        html,
-        'text/html'
-    );
+        ).then(r=>r.text());
 
-    TWM.state.reports=[];
+        const doc=
+        new DOMParser()
+        .parseFromString(
+            html,
+            'text/html'
+        );
 
-    doc.querySelectorAll('tr')
-    .forEach(row=>{
+        TWM.state.reports=[];
 
-        const txt=
-        row.innerText
-        .toLowerCase();
+        doc.querySelectorAll('tr')
+        .forEach(row=>{
 
-        if(
-            !txt.includes('|')
-        )return;
+            const txt=
+            row.innerText
+            .toLowerCase();
 
-        TWM.state.reports.push({
+            if(
+                !txt.includes('|')
+            )return;
 
-            raw:txt,
+            TWM.state.reports.push({
 
-            attack:
-            txt.includes('atak'),
+                raw:txt,
 
-            support:
-            txt.includes('wsparcie')
+                attack:
+                txt.includes('atak'),
+
+                support:
+                txt.includes('wsparcie'),
+
+                spy:
+                txt.includes('zwiad')
+
+            });
 
         });
 
-    });
+    }catch(e){
+
+        console.error(e);
+
+    }
 
 };
 
@@ -902,60 +1180,68 @@ async()=>{
 TWM.AI.scanEconomy=
 async()=>{
 
-    const html=
-    await fetch(
+    try{
 
-        '/game.php?village='+
-        game_data.village.id+
-        '&screen=ranking&mode=in_a_day&type=loot'
+        const html=
+        await fetch(
 
-    ).then(r=>r.text());
+            '/game.php?village='+
+            game_data.village.id+
+            '&screen=ranking&mode=in_a_day&type=loot'
 
-    const doc=
-    new DOMParser()
-    .parseFromString(
-        html,
-        'text/html'
-    );
+        ).then(r=>r.text());
 
-    doc.querySelectorAll('tr')
-    .forEach(row=>{
-
-        const tds=
-        row.querySelectorAll('td');
-
-        if(tds.length<4)return;
-
-        const player=
-        tds[1]
-        .innerText
-        .trim();
-
-        const loot=
-        parseInt(
-
-            tds[3]
-            .innerText
-            .replace(/\./g,'')
-
-        )||0;
-
-        const p=
-        Object.values(
-            TWM.state.players
-        ).find(x=>
-
-            x.name===player
-
+        const doc=
+        new DOMParser()
+        .parseFromString(
+            html,
+            'text/html'
         );
 
-        if(p){
+        doc.querySelectorAll('tr')
+        .forEach(row=>{
 
-            p.loot24h=loot;
+            const tds=
+            row.querySelectorAll('td');
 
-        }
+            if(tds.length<4)return;
 
-    });
+            const player=
+            tds[1]
+            .innerText
+            .trim();
+
+            const loot=
+            parseInt(
+
+                tds[3]
+                .innerText
+                .replace(/\./g,'')
+
+            )||0;
+
+            const p=
+            Object.values(
+                TWM.state.players
+            ).find(x=>
+
+                x.name===player
+
+            );
+
+            if(p){
+
+                p.loot24h=loot;
+
+            }
+
+        });
+
+    }catch(e){
+
+        console.error(e);
+
+    }
 
 };
 
@@ -1042,165 +1328,13 @@ TWM.UI.renderPlayers=
 
         <tr>
 
-        <td>
-        ${p.name}
-        </td>
+        <td>${p.name}</td>
 
-        <td>
-        ${p.relation}
-        </td>
+        <td>${p.relation}</td>
 
-        <td>
-        ${p.points}
-        </td>
+        <td>${p.points}</td>
 
-        <td>
-        ${p.loot24h}
-        </td>
-
-        </tr>
-
-        `;
-
-    });
-
-    html+=`</table>`;
-
-    $('#twm_content').html(
-        html
-    );
-
-};
-
-TWM.UI.renderWar=
-()=>{
-
-    const villages=
-    TWM.state.villages
-
-    .filter(v=>
-
-        v.frontline
-
-    )
-
-    .sort((a,b)=>
-
-        b.targetScore-
-        a.targetScore
-
-    )
-
-    .slice(0,200);
-
-    let html=`
-
-    <h2>⚔ WAR AI</h2>
-
-    <table class="vis" width="100%">
-
-    <tr>
-
-    <th>KOORDY</th>
-    <th>GRACZ</th>
-    <th>DANGER</th>
-    <th>TARGET</th>
-
-    </tr>
-
-    `;
-
-    villages.forEach(v=>{
-
-        html+=`
-
-        <tr>
-
-        <td>
-        ${v.coord}
-        </td>
-
-        <td>
-        ${v.player?.name||'-'}
-        </td>
-
-        <td>
-        ${v.danger}
-        </td>
-
-        <td>
-        ${v.targetScore}
-        </td>
-
-        </tr>
-
-        `;
-
-    });
-
-    html+=`</table>`;
-
-    $('#twm_content').html(
-        html
-    );
-
-};
-
-TWM.UI.renderHeatmap=
-()=>{
-
-    const regions=
-    Object.values(
-        TWM.state.regions
-    )
-
-    .sort((a,b)=>
-
-        b.danger-
-        a.danger
-
-    )
-
-    .slice(0,100);
-
-    let html=`
-
-    <h2>🔥 HEATMAP</h2>
-
-    <table class="vis" width="100%">
-
-    <tr>
-
-    <th>REGION</th>
-    <th>WIOSKI</th>
-    <th>ENEMY</th>
-    <th>DANGER</th>
-
-    </tr>
-
-    `;
-
-    regions.forEach(r=>{
-
-        html+=`
-
-        <tr>
-
-        <td>
-        ${r.id}
-        </td>
-
-        <td>
-        ${r.total}
-        </td>
-
-        <td>
-        ${r.enemy}
-        </td>
-
-        <td>
-        ${r.danger}
-        </td>
+        <td>${p.loot24h}</td>
 
         </tr>
 
@@ -1229,6 +1363,7 @@ TWM.UI.renderReports=
 
     <th>ATAK</th>
     <th>SUPPORT</th>
+    <th>SPY</th>
 
     </tr>
 
@@ -1250,6 +1385,10 @@ TWM.UI.renderReports=
         ${r.support?'🛡':''}
         </td>
 
+        <td>
+        ${r.spy?'👁':''}
+        </td>
+
         </tr>
 
         `;
@@ -1264,37 +1403,288 @@ TWM.UI.renderReports=
 
 };
 
-/* =========================================================
-   SIMPLE TABS
-========================================================= */
+TWM.UI.renderWar=
+()=>{
 
-$('#tab_dashboard').on('click',()=>{
+    const villages=
+    TWM.state.bestTargets
 
-    TWM.UI.renderDashboard();
+    .sort((a,b)=>
 
-});
+        b.targetScore-
+        a.targetScore
 
-$('#tab_players').on('click',()=>{
+    )
+
+    .slice(0,200);
+
+    let html=`
+
+    <h2>⚔ WAR AI</h2>
+
+    <table class="vis" width="100%">
+
+    <tr>
+
+    <th>KOORDY</th>
+    <th>GRACZ</th>
+    <th>REL</th>
+    <th>DANGER</th>
+    <th>TARGET</th>
+
+    </tr>
+
+    `;
+
+    villages.forEach(v=>{
+
+        html+=`
+
+        <tr>
+
+        <td>${v.coord}</td>
+
+        <td>${v.player?.name||'-'}</td>
+
+        <td>${v.player?.relation||'-'}</td>
+
+        <td>${v.danger}</td>
+
+        <td>${v.targetScore}</td>
+
+        </tr>
+
+        `;
+
+    });
+
+    html+=`</table>`;
+
+    $('#twm_content').html(
+        html
+    );
+
+};
+
+TWM.UI.renderHeatmap=
+()=>{
+
+    const regions=
+    Object.values(
+        TWM.state.regions
+    )
+
+    .sort((a,b)=>
+
+        b.danger-a.danger
+
+    )
+
+    .slice(0,100);
+
+    let html=`
+
+    <h2>🔥 HEATMAP</h2>
+
+    <table class="vis" width="100%">
+
+    <tr>
+
+    <th>REGION</th>
+    <th>WIOSKI</th>
+    <th>ENEMY</th>
+    <th>DANGER</th>
+
+    </tr>
+
+    `;
+
+    regions.forEach(r=>{
+
+        html+=`
+
+        <tr>
+
+        <td>${r.id}</td>
+
+        <td>${r.total}</td>
+
+        <td>${r.enemy}</td>
+
+        <td>${r.danger}</td>
+
+        </tr>
+
+        `;
+
+    });
+
+    html+=`</table>`;
+
+    $('#twm_content').html(
+        html
+    );
+
+};
+
+TWM.UI.renderConquer=
+()=>{
+
+    const villages=
+    TWM.state.bestTargets
+
+    .sort((a,b)=>
+
+        b.targetScore-
+        a.targetScore
+
+    )
+
+    .slice(0,200);
+
+    let html=`
+
+    <h2>👑 CONQUER AI</h2>
+
+    <table class="vis" width="100%">
+
+    <tr>
+
+    <th>KOORDY</th>
+    <th>GRACZ</th>
+    <th>PKT</th>
+    <th>SCORE</th>
+
+    </tr>
+
+    `;
+
+    villages.forEach(v=>{
+
+        html+=`
+
+        <tr>
+
+        <td>${v.coord}</td>
+
+        <td>${v.player?.name||'-'}</td>
+
+        <td>${v.points}</td>
+
+        <td>${v.targetScore}</td>
+
+        </tr>
+
+        `;
+
+    });
+
+    html+=`</table>`;
+
+    $('#twm_content').html(
+        html
+    );
+
+};
+
+TWM.UI.renderEconomy=
+()=>{
 
     TWM.UI.renderPlayers();
 
-});
+};
 
-$('#tab_reports').on('click',()=>{
+TWM.UI.renderActivity=
+()=>{
 
     TWM.UI.renderReports();
 
-});
+};
 
-$('#tab_war').on('click',()=>{
+TWM.UI.renderEmpire=
+()=>{
 
-    TWM.UI.renderWar();
+    $('#twm_content').html(`
 
-});
+    <h2>🏰 EMPIRE</h2>
 
-$('#tab_heatmap').on('click',()=>{
+    <p>
+
+    Twoje wioski:
+    ${
+        TWM.state.villages.filter(v=>
+
+            v.player &&
+            v.player.relation==='own'
+
+        ).length
+    }
+
+    </p>
+
+    `);
+
+};
+
+TWM.UI.renderWorld=
+()=>{
 
     TWM.UI.renderHeatmap();
+
+};
+
+/* =========================================================
+   TABS
+========================================================= */
+
+const tabs={
+
+    dashboard:
+    'renderDashboard',
+
+    world:
+    'renderWorld',
+
+    players:
+    'renderPlayers',
+
+    reports:
+    'renderReports',
+
+    war:
+    'renderWar',
+
+    heatmap:
+    'renderHeatmap',
+
+    conquer:
+    'renderConquer',
+
+    economy:
+    'renderEconomy',
+
+    activity:
+    'renderActivity',
+
+    empire:
+    'renderEmpire'
+
+};
+
+Object.keys(tabs)
+.forEach(tab=>{
+
+    $('#tab_'+tab)
+    .on('click',()=>{
+
+        TWM.state.currentTab=
+        tab;
+
+        TWM.UI[
+            tabs[tab]
+        ]();
+
+    });
 
 });
 
@@ -1318,15 +1708,35 @@ TWM.run=async()=>{
             'AI SKANUJE...'
         );
 
-        await TWM.AI.scanPlayers();
+        await TWM.Helpers.safe(
+            TWM.AI.scanPlayers,
+            'players'
+        );
 
-        await TWM.AI.scanAllies();
+        await TWM.Helpers.safe(
+            TWM.AI.scanAllies,
+            'allies'
+        );
 
-        await TWM.AI.scanVillages();
+        await TWM.Helpers.safe(
+            TWM.AI.scanDiplomacy,
+            'diplomacy'
+        );
 
-        await TWM.AI.scanEconomy();
+        await TWM.Helpers.safe(
+            TWM.AI.scanVillages,
+            'villages'
+        );
 
-        await TWM.AI.scanReports();
+        await TWM.Helpers.safe(
+            TWM.AI.scanEconomy,
+            'economy'
+        );
+
+        await TWM.Helpers.safe(
+            TWM.AI.scanReports,
+            'reports'
+        );
 
         TWM.AI.linkVillagePlayers();
 
@@ -1340,7 +1750,18 @@ TWM.run=async()=>{
 
         TWM.AI.scanRegions();
 
-        TWM.UI.renderDashboard();
+        const render=
+        tabs[
+            TWM.state.currentTab
+        ];
+
+        if(render){
+
+            TWM.UI[
+                render
+            ]();
+
+        }
 
         TWM.Helpers.status(
             'AI GOTOWE'
