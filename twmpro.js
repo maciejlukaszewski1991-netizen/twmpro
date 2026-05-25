@@ -1,6 +1,6 @@
 /* =========================================================
-   TWMPRO AI CORE v15 STABLE
-   FULL FIXED EDITION
+   TWMPRO AI CORE v16
+   STABLE UI + WORKING TABS
 ========================================================= */
 
 (async()=>{
@@ -27,11 +27,11 @@ if(game_data.screen!=='map'){
    SINGLE INSTANCE
 ========================================================= */
 
-if(window.TWMAI_V15){
+if(window.TWMAI_V16){
 
     try{
 
-        window.TWMAI_V15.open();
+        window.TWMAI_V16.open();
 
     }catch(e){}
 
@@ -43,17 +43,15 @@ if(window.TWMAI_V15){
    ROOT
 ========================================================= */
 
-window.TWMAI_V15={};
+window.TWMAI_V16={};
 
-const TWM=window.TWMAI_V15;
+const TWM=window.TWMAI_V16;
 
 /* =========================================================
    CONFIG
 ========================================================= */
 
 TWM.config={
-
-    radius:60,
 
     refresh:120000,
 
@@ -65,7 +63,7 @@ TWM.config={
 
     height:850,
 
-    storage:'TWMAI_V15'
+    storage:'TWMAI_V16'
 
 };
 
@@ -75,21 +73,7 @@ TWM.config={
 
 TWM.state={
 
-    villages:[],
-
-    players:{},
-
-    allies:{},
-
-    relations:{},
-
-    rankings:{},
-
-    economy:{},
-
-    knownCoords:{},
-
-    currentTab:'players',
+    currentTab:'main',
 
     autoRefresh:null,
 
@@ -118,13 +102,6 @@ TWM.Storage.load=()=>{
 
         const data=
         JSON.parse(raw);
-
-        if(data.knownCoords){
-
-            TWM.state.knownCoords=
-            data.knownCoords;
-
-        }
 
         if(data.width){
 
@@ -174,9 +151,6 @@ TWM.Storage.save=()=>{
 
             JSON.stringify({
 
-                knownCoords:
-                TWM.state.knownCoords,
-
                 width:
                 TWM.UI.panel.offsetWidth,
 
@@ -206,42 +180,6 @@ TWM.Storage.save=()=>{
 ========================================================= */
 
 TWM.Helpers={};
-
-TWM.Helpers.coord=(txt)=>{
-
-    if(!txt){
-
-        return{
-
-            x:0,
-            y:0
-
-        };
-
-    }
-
-    const c=txt.split('|');
-
-    return{
-
-        x:+c[0],
-        y:+c[1]
-
-    };
-
-};
-
-TWM.Helpers.distance=
-(x1,y1,x2,y2)=>{
-
-    return Math.sqrt(
-
-        Math.pow(x2-x1,2)+
-        Math.pow(y2-y1,2)
-
-    );
-
-};
 
 TWM.Helpers.status=(txt)=>{
 
@@ -393,11 +331,10 @@ Object.assign(
 );
 
 document.body.appendChild(
-    TWM.UI.panel
-);
+    TWM.UI.panel);
 
 /* =========================================================
-   PANEL HTML
+   HTML
 ========================================================= */
 
 TWM.UI.panel.innerHTML=`
@@ -416,7 +353,7 @@ user-select:none;
 ">
 
 <div>
-🧠 TWMPRO AI CORE v15
+🧠 TWMPRO AI CORE v16
 </div>
 
 <div style="display:flex;gap:4px;">
@@ -446,6 +383,10 @@ align-items:center;
 border-bottom:1px solid #7a5b2e;
 flex-wrap:wrap;
 ">
+
+<button id="tab_main">
+🏠 GŁÓWNA
+</button>
 
 <button id="tab_players">
 👤 GRACZE
@@ -781,15 +722,15 @@ $('#twm_close').on('click',()=>{
 
     TWM.UI.float.remove();
 
-    delete window.TWMAI_V15;
+    delete window.TWMAI_V16;
 
 });
 
 /* =========================================================
-   RENDER
+   RENDERS
 ========================================================= */
 
-TWM.UI.render=()=>{
+TWM.UI.renderMain=()=>{
 
     const content=
     document.querySelector(
@@ -798,48 +739,37 @@ TWM.UI.render=()=>{
 
     content.innerHTML=`
 
-    <div style="
-    padding:20px;
-    font-size:14px;
-    ">
+    <div style="padding:20px;">
 
-    <h2>🧠 TWMPRO AI CORE v15</h2>
+    <h2>🧠 TWMPRO AI CORE v16</h2>
 
-    <p>✅ Stabilny system resize</p>
+    <p>✅ Stabilny system UI</p>
 
-    <p>✅ Stabilny drag system</p>
+    <p>✅ Resize działa</p>
 
     <p>✅ Fullscreen działa</p>
 
-    <p>✅ Zapisywanie pozycji</p>
+    <p>✅ Zapamiętywanie pozycji działa</p>
 
-    <p>✅ Zapisywanie rozmiaru</p>
-
-    <p>✅ Cleanup listenerów</p>
-
-    <p>✅ Safe refresh loop</p>
-
-    <p>✅ Memory leak fixes</p>
+    <p>✅ Zakładki działają</p>
 
     <hr>
 
-    <h3>🚧 Moduły AI w budowie</h3>
+    <h3>🚧 AI MODUŁY</h3>
 
     <ul>
 
-        <li>📜 Report AI</li>
-
         <li>🌍 World AI</li>
 
-        <li>🛡 Diplomacy AI</li>
+        <li>📜 Report AI</li>
 
         <li>⚔ War AI</li>
+
+        <li>🛡 Diplomacy AI</li>
 
         <li>🌾 Economy AI</li>
 
         <li>🏆 Ranking AI</li>
-
-        <li>🔥 Activity AI</li>
 
     </ul>
 
@@ -848,6 +778,140 @@ TWM.UI.render=()=>{
     `;
 
 };
+
+TWM.UI.renderPlayers=()=>{
+
+    const content=
+    document.querySelector(
+        '#twm_content'
+    );
+
+    content.innerHTML=`
+
+    <div style="padding:20px;">
+
+    <h2>👤 GRACZE</h2>
+
+    <p>🚧 Player AI w budowie</p>
+
+    </div>
+
+    `;
+
+};
+
+TWM.UI.renderBarbs=()=>{
+
+    const content=
+    document.querySelector(
+        '#twm_content'
+    );
+
+    content.innerHTML=`
+
+    <div style="padding:20px;">
+
+    <h2>🌾 BARBY</h2>
+
+    <p>🚧 Barb AI w budowie</p>
+
+    </div>
+
+    `;
+
+};
+
+TWM.UI.renderReports=()=>{
+
+    const content=
+    document.querySelector(
+        '#twm_content'
+    );
+
+    content.innerHTML=`
+
+    <div style="padding:20px;">
+
+    <h2>📜 RAPORTY</h2>
+
+    <p>🚧 Report AI w budowie</p>
+
+    </div>
+
+    `;
+
+};
+
+TWM.UI.renderDiplomacy=()=>{
+
+    const content=
+    document.querySelector(
+        '#twm_content'
+    );
+
+    content.innerHTML=`
+
+    <div style="padding:20px;">
+
+    <h2>🛡 DYPLOMACJA</h2>
+
+    <p>🚧 Diplomacy AI w budowie</p>
+
+    </div>
+
+    `;
+
+};
+
+/* =========================================================
+   TAB EVENTS
+========================================================= */
+
+$('#tab_main').on('click',()=>{
+
+    TWM.state.currentTab='main';
+
+    TWM.UI.renderMain();
+
+});
+
+$('#tab_players').on('click',()=>{
+
+    TWM.state.currentTab='players';
+
+    TWM.UI.renderPlayers();
+
+});
+
+$('#tab_barbs').on('click',()=>{
+
+    TWM.state.currentTab='barbs';
+
+    TWM.UI.renderBarbs();
+
+});
+
+$('#tab_reports').on('click',()=>{
+
+    TWM.state.currentTab='reports';
+
+    TWM.UI.renderReports();
+
+});
+
+$('#tab_diplomacy').on('click',()=>{
+
+    TWM.state.currentTab='diplomacy';
+
+    TWM.UI.renderDiplomacy();
+
+});
+
+$('#twm_scan').on('click',async()=>{
+
+    await TWM.run();
+
+});
 
 /* =========================================================
    RUN
@@ -869,7 +933,41 @@ TWM.run=async()=>{
             'ŁADOWANIE AI...'
         );
 
-        TWM.UI.render();
+        switch(
+            TWM.state.currentTab
+        ){
+
+            case 'players':
+
+                TWM.UI.renderPlayers();
+
+            break;
+
+            case 'barbs':
+
+                TWM.UI.renderBarbs();
+
+            break;
+
+            case 'reports':
+
+                TWM.UI.renderReports();
+
+            break;
+
+            case 'diplomacy':
+
+                TWM.UI.renderDiplomacy();
+
+            break;
+
+            default:
+
+                TWM.UI.renderMain();
+
+            break;
+
+        }
 
         TWM.Helpers.status(
             'AI GOTOWE'
