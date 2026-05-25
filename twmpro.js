@@ -1,568 +1,859 @@
-/* =========================================================
-   TWMPRO AI OVERMIND v51
-   OFFICIAL SCRIPT INTEGRATION BUILD
-========================================================= */
+javascript:(async()=>{
+
+'use strict';
 
 /* =========================================================
-   NEW MODULES v51
-=========================================================
-
-✅ TROOP COUNTER AI
-✅ SUPPORT TRACKER AI
-✅ FARM ASSISTANT SYNC
-✅ NOTE SYSTEM AI
-✅ STRATEGIC MAP AI
-✅ MASS LABEL AI
-✅ ATTACK PLANNER AI
-✅ BATTLE SIMULATION AI
-✅ KNOWN/UNKNOWN ENGINE 2.0
-✅ PLAYER INTEL MEMORY
-✅ REGION POWER AI
-✅ OFF/DEF DETECTOR
-
+   TWMPRO AI OVERMIND
+   FULL STABLE BUILD
+   v60.1 FINAL
 ========================================================= */
+
+if(window.TWMPRO_AI){
+
+    alert('TWMPRO already loaded');
+
+    return;
+
+}
+
+window.TWMPRO_AI={};
+
+const TWM=window.TWMPRO_AI;
 
 /* =========================================================
-   TROOP COUNTER AI
+   CONFIG
 ========================================================= */
 
-TWM.Modules.Troops={};
+TWM.config={
 
-TWM.Modules.Troops.scan=
-async()=>{
+    version:'v60.1',
+
+    refresh:120000,
+
+    scanRadius:45,
+
+    requestDelay:250,
+
+    maxRows:300,
+
+    storagePrefix:'TWMPRO_V60'
+
+};
+
+/* =========================================================
+   STATE
+========================================================= */
+
+TWM.state={
+
+    running:false,
+
+    currentTab:'war',
+
+    villages:{},
+
+    players:{},
+
+    reports:{},
+
+    reportIntel:{},
+
+    reportHistory:{},
+
+    recommendations:[],
+
+    alerts:[],
+
+    logs:[],
+
+    war:{
+
+        attacks:[],
+        supports:[],
+        trains:[],
+        eta:[],
+        vectors:[],
+        vectorPressure:{}
+
+    }
+
+};
+
+/* =========================================================
+   STORAGE
+========================================================= */
+
+TWM.Storage={};
+
+TWM.Storage.key=
+(k)=>{
+
+    return (
+
+        TWM.config.storagePrefix+
+
+        '_'+k
+
+    );
+
+};
+
+TWM.Storage.save=
+(k,v)=>{
+
+    localStorage.setItem(
+
+        TWM.Storage.key(k),
+
+        JSON.stringify(v)
+
+    );
+
+};
+
+TWM.Storage.load=
+(k,d=null)=>{
 
     try{
 
-        const html=
-        await TWM.Request.fetch(
+        const x=
 
-            '/game.php?screen=overview_villages&mode=combined'
+        localStorage.getItem(
+
+            TWM.Storage.key(k)
 
         );
 
-        const doc=
-        new DOMParser()
-        .parseFromString(
-            html,
-            'text/html'
-        );
+        if(!x)return d;
 
-        TWM.state.troops={};
-
-        doc.querySelectorAll(
-            '#combined_table tr'
-        ).forEach(row=>{
-
-            const tds=
-            row.querySelectorAll('td');
-
-            if(tds.length<15)return;
-
-            const coord=
-            tds[0]
-            ?.innerText
-            ?.match(/\d+\|\d+/)?.[0];
-
-            if(!coord)return;
-
-            TWM.state.troops[
-                coord
-            ]={
-
-                spear:
-                parseInt(
-                    tds[2]?.innerText
-                )||0,
-
-                sword:
-                parseInt(
-                    tds[3]?.innerText
-                )||0,
-
-                axe:
-                parseInt(
-                    tds[4]?.innerText
-                )||0,
-
-                archer:
-                parseInt(
-                    tds[5]?.innerText
-                )||0,
-
-                light:
-                parseInt(
-                    tds[6]?.innerText
-                )||0,
-
-                heavy:
-                parseInt(
-                    tds[7]?.innerText
-                )||0,
-
-                ram:
-                parseInt(
-                    tds[8]?.innerText
-                )||0,
-
-                catapult:
-                parseInt(
-                    tds[9]?.innerText
-                )||0,
-
-                noble:
-                parseInt(
-                    tds[10]?.innerText
-                )||0
-
-            };
-
-        });
+        return JSON.parse(x);
 
     }catch(e){
 
-        console.error(e);
+        return d;
 
     }
 
 };
 
 /* =========================================================
-   REGION POWER AI
+   HELPERS
 ========================================================= */
 
-TWM.Modules.RegionPower={};
+TWM.Helpers={};
 
-TWM.Modules.RegionPower.run=
-()=>{
+TWM.Helpers.sleep=
+(ms)=>new Promise(r=>setTimeout(r,ms));
 
-    Object.values(
-        TWM.state.regions
-    ).forEach(r=>{
+TWM.Helpers.coord=
+(c)=>{
 
-        r.offPower=0;
+    if(!c){
 
-        r.defPower=0;
+        return{
 
-        r.supportPower=0;
+            x:0,
+            y:0
 
-        r.villageList=
-        r.villageList||[];
+        };
 
-        r.villageList
-        .forEach(v=>{
+    }
 
-            const t=
-            TWM.state.troops[
-                v.coord
-            ];
+    const p=c.split('|');
 
-            if(!t)return;
+    return{
 
-            r.offPower+=
+        x:+p[0],
 
-                t.axe+
-                t.light*4+
-                t.ram*5;
+        y:+p[1]
 
-            r.defPower+=
+    };
 
-                t.spear+
-                t.sword*2+
-                t.heavy*4;
+};
 
-            r.supportPower+=
+TWM.Helpers.distance=
+(x1,y1,x2,y2)=>{
 
-                t.heavy+
-                t.sword;
+    return Math.sqrt(
 
-        });
+        Math.pow(x2-x1,2)+
+        Math.pow(y2-y1,2)
 
-    });
+    );
 
 };
 
 /* =========================================================
-   SUPPORT TRACKER AI
+   DEBUG
 ========================================================= */
 
-TWM.Modules.Support={};
+TWM.Debug={};
 
-TWM.Modules.Support.scan=
+TWM.Debug.logs=[];
+
+TWM.Debug.maxLogs=250;
+
+TWM.Debug.log=
+(type,module,message,data=null)=>{
+
+    const entry={
+
+        time:
+        new Date()
+        .toLocaleTimeString(),
+
+        type,
+
+        module,
+
+        message,
+
+        data
+
+    };
+
+    TWM.Debug.logs.push(
+        entry
+    );
+
+    if(
+
+        TWM.Debug.logs.length>
+
+        TWM.Debug.maxLogs
+
+    ){
+
+        TWM.Debug.logs=
+
+        TWM.Debug.logs.slice(
+
+            -TWM.Debug.maxLogs
+
+        );
+
+    }
+
+    console.log(
+
+        '[TWMPRO]',
+        type,
+        module,
+        message,
+        data
+
+    );
+
+};
+
+window.addEventListener(
+    'error',
+    function(e){
+
+        TWM.Debug.log(
+
+            'ERROR',
+
+            'GLOBAL',
+
+            e.message,
+
+            {
+
+                file:e.filename,
+
+                line:e.lineno,
+
+                stack:e.error?.stack
+
+            }
+
+        );
+
+    }
+
+);
+
+window.addEventListener(
+    'unhandledrejection',
+    function(e){
+
+        TWM.Debug.log(
+
+            'PROMISE',
+
+            'ASYNC',
+
+            e.reason?.message||
+
+            'Unhandled Promise',
+
+            {
+
+                stack:e.reason?.stack
+
+            }
+
+        );
+
+    }
+
+);
+
+TWM.Debug.export=
+()=>{
+
+    return JSON.stringify({
+
+        version:
+        TWM.config.version,
+
+        world:
+        game_data.world,
+
+        player:
+        game_data.player.name,
+
+        village:
+        game_data.village.coord,
+
+        logs:
+        TWM.Debug.logs,
+
+        stats:{
+
+            villages:
+
+            Object.keys(
+                TWM.state.villages
+            ).length,
+
+            players:
+
+            Object.keys(
+                TWM.state.players
+            ).length,
+
+            attacks:
+
+            TWM.state.war
+            .attacks.length,
+
+            trains:
+
+            TWM.state.war
+            .trains.length
+
+        }
+
+    },null,2);
+
+};
+
+TWM.Debug.copy=
 async()=>{
+
+    await navigator
+    .clipboard
+    .writeText(
+
+        TWM.Debug.export()
+
+    );
+
+    UI.SuccessMessage(
+
+        'TWMPRO debug copied'
+
+    );
+
+};
+
+/* =========================================================
+   REQUEST
+========================================================= */
+
+TWM.Request={};
+
+TWM.Request.fetch=
+async(url,retry=0)=>{
+
+    const start=
+    performance.now();
 
     try{
 
-        const html=
-        await TWM.Request.fetch(
+        await TWM.Helpers.sleep(
 
-            '/game.php?screen=overview_villages&mode=units&type=away_detail'
+            TWM.config.requestDelay
 
         );
 
-        const doc=
-        new DOMParser()
-        .parseFromString(
-            html,
-            'text/html'
-        );
+        const r=
+        await fetch(url,{
 
-        TWM.state.support={};
-
-        doc.querySelectorAll(
-            '#units_table tr'
-        ).forEach(row=>{
-
-            const txt=
-            row.innerText;
-
-            const coord=
-            txt.match(/\d+\|\d+/)?.[0];
-
-            if(!coord)return;
-
-            TWM.state.support[
-                coord
-            ]={
-
-                active:true,
-
-                raw:txt
-
-            };
+            credentials:'same-origin'
 
         });
 
+        if(!r.ok){
+
+            throw new Error(
+
+                'HTTP '+r.status
+
+            );
+
+        }
+
+        const txt=
+        await r.text();
+
+        const end=
+        performance.now();
+
+        TWM.Debug.log(
+
+            'REQUEST_OK',
+
+            'REQUEST',
+
+            url,
+
+            {
+
+                ms:
+                Math.floor(
+                    end-start
+                )
+
+            }
+
+        );
+
+        return txt;
+
     }catch(e){
 
-        console.error(e);
+        const end=
+        performance.now();
+
+        TWM.Debug.log(
+
+            'REQUEST_FAIL',
+
+            'REQUEST',
+
+            e.message,
+
+            {
+
+                url,
+
+                retry,
+
+                ms:
+                Math.floor(
+                    end-start
+                )
+
+            }
+
+        );
+
+        if(retry<3){
+
+            return await TWM.Request.fetch(
+
+                url,
+
+                retry+1
+
+            );
+
+        }
+
+        return '';
 
     }
 
 };
 
 /* =========================================================
-   FARM ASSISTANT SYNC
+   UI
 ========================================================= */
 
-TWM.Modules.FarmSync={};
+$('#twm_panel').remove();
 
-TWM.Modules.FarmSync.scan=
-()=>{
+$('body').append(`
 
-    TWM.state.farmKnown={};
+<div id="twm_panel"
+style="
+position:fixed;
+top:20px;
+left:20px;
+width:1100px;
+height:720px;
+background:#f4e4bc;
+border:2px solid #5c3b12;
+z-index:999999;
+font-size:11px;
+display:flex;
+flex-direction:column;
+resize:both;
+overflow:hidden;
+">
 
-    $('.farm_icon_a')
-    .each(function(){
+<div style="
+background:#5c3b12;
+color:white;
+padding:6px;
+font-weight:bold;
+display:flex;
+justify-content:space-between;
+">
 
-        const row=
-        $(this).closest('tr');
+<div>
+🧠 TWMPRO AI OVERMIND v60.1
+</div>
 
-        const coord=
-        row.text()
-        .match(/\d+\|\d+/)?.[0];
+<div>
 
-        if(!coord)return;
+<button id="twm_reload">
+SCAN
+</button>
 
-        TWM.state.farmKnown[
-            coord
-        ]=true;
+<button id="twm_debug_export">
+🐞 DEBUG
+</button>
+
+<button id="twm_close">
+X
+</button>
+
+</div>
+
+</div>
+
+<div style="
+padding:4px;
+display:flex;
+gap:4px;
+flex-wrap:wrap;
+background:#d9c08b;
+">
+
+<button data-tab="war">
+⚔ WAR
+</button>
+
+<button data-tab="livewar">
+👑 LIVE
+</button>
+
+<button data-tab="players">
+👤 PLAYERS
+</button>
+
+<button data-tab="targets">
+🎯 TARGETS
+</button>
+
+<button data-tab="alerts">
+🚨 ALERTS
+</button>
+
+</div>
+
+<div id="twm_content"
+style="
+flex:1;
+overflow:auto;
+padding:6px;
+background:#f8eed1;
+">
+
+</div>
+
+</div>
+
+`);
+
+/* =========================================================
+   CLOSE
+========================================================= */
+
+$('#twm_close').on(
+    'click',
+    ()=>{
+
+        clearInterval(
+            TWM.state.interval
+        );
+
+        $('#twm_panel').remove();
+
+        delete window.TWMPRO_AI;
+
+    }
+
+);
+
+/* =========================================================
+   DEBUG BUTTON
+========================================================= */
+
+$('#twm_debug_export').on(
+    'click',
+    async()=>{
+
+        await TWM.Debug.copy();
+
+    }
+
+);
+
+/* =========================================================
+   CENTER
+========================================================= */
+
+TWM.state.center=
+TWM.Helpers.coord(
+    game_data.village.coord
+);
+
+/* =========================================================
+   MODULES
+========================================================= */
+
+TWM.Modules={};
+
+/* =========================================================
+   PLAYERS
+========================================================= */
+
+TWM.Modules.Players={};
+
+TWM.Modules.Players.scan=
+async()=>{
+
+    const txt=
+    await TWM.Request.fetch(
+        '/map/player.txt'
+    );
+
+    if(!txt)return;
+
+    TWM.state.players={};
+
+    txt.trim()
+    .split('\n')
+    .forEach(line=>{
+
+        if(!line)return;
+
+        const p=
+        line.split(',');
+
+        if(p.length<5)return;
+
+        TWM.state.players[
+            p[0]
+        ]={
+
+            id:p[0],
+
+            name:p[1]||'Unknown',
+
+            ally:p[2]||'0',
+
+            villages:
+            parseInt(p[3])||0,
+
+            points:
+            parseInt(p[4])||0,
+
+            relation:'neutral',
+
+            behavior:'UNKNOWN',
+
+            loot:0
+
+        };
 
     });
 
 };
 
 /* =========================================================
-   KNOWN / UNKNOWN ENGINE 2.0
+   VILLAGES
 ========================================================= */
 
-TWM.Modules.Known={};
+TWM.Modules.Villages={};
 
-TWM.Modules.Known.run=
-()=>{
+TWM.Modules.Villages.scan=
+async()=>{
 
-    Object.values(
-        TWM.state.villages
-    ).forEach(v=>{
+    const txt=
+    await TWM.Request.fetch(
+        '/map/village.txt'
+    );
 
-        v.known=false;
+    if(!txt)return;
 
-        if(
-            TWM.state.farmKnown[
-                v.coord
-            ]
-        ){
+    TWM.state.villages={};
 
-            v.known=true;
+    txt.trim()
+    .split('\n')
+    .forEach(line=>{
 
-        }
+        if(!line)return;
 
-        if(
-            TWM.state.reports[
-                v.coord
-            ]
-        ){
+        const v=
+        line.split(',');
 
-            v.known=true;
+        if(v.length<6)return;
 
-        }
+        const x=
+        parseInt(v[2]);
 
-        if(
-            TWM.state.intel[
-                v.coord
-            ]
-        ){
-
-            v.known=true;
-
-        }
-
-    });
-
-};
-
-/* =========================================================
-   NOTE SYSTEM AI
-========================================================= */
-
-TWM.Modules.Notes={};
-
-TWM.Modules.Notes.create=
-(v)=>{
-
-    let note='';
-
-    if(
-        v.owner?.relation==='enemy'
-    ){
-
-        note+='🔥 ENEMY\\n';
-
-    }
-
-    if(
-        v.owner?.profile==='FARMER'
-    ){
-
-        note+='🌾 FARMER\\n';
-
-    }
-
-    if(
-        v.owner?.profile==='DEAD'
-    ){
-
-        note+='💀 DEAD\\n';
-
-    }
-
-    if(v.frontline){
-
-        note+='⚔ FRONTLINE\\n';
-
-    }
-
-    if(v.targetScore>180){
-
-        note+='👑 CONQUER TARGET\\n';
-
-    }
-
-    return note;
-
-};
-
-/* =========================================================
-   MASS LABEL AI
-========================================================= */
-
-TWM.Modules.Labels={};
-
-TWM.Modules.Labels.run=
-()=>{
-
-    Object.values(
-        TWM.state.villages
-    ).forEach(v=>{
-
-        if(!v.owner)return;
-
-        v.label='';
+        const y=
+        parseInt(v[3]);
 
         if(
-            v.owner.profile==='DEAD'
-        ){
-
-            v.label='DEAD';
-
-        }
-
-        else if(
-            v.owner.profile==='FARMER'
-        ){
-
-            v.label='FARM';
-
-        }
-
-        else if(
-            v.frontline
-        ){
-
-            v.label='FRONT';
-
-        }
-
-        else if(
-            v.targetScore>180
-        ){
-
-            v.label='CONQUER';
-
-        }
-
-    });
-
-};
-
-/* =========================================================
-   ATTACK PLANNER AI
-========================================================= */
-
-TWM.Modules.Planner={};
-
-TWM.Modules.Planner.run=
-()=>{
-
-    TWM.state.plans=[];
-
-    Object.values(
-        TWM.state.villages
-    ).forEach(v=>{
-
-        if(
-            v.targetScore<150
+            isNaN(x)||
+            isNaN(y)
         ){
 
             return;
 
         }
 
-        const my=
-        TWM.state.world.center;
-
         const dist=
+
         TWM.Helpers.distance(
 
-            my.x,
-            my.y,
+            TWM.state.center.x,
+            TWM.state.center.y,
 
-            v.x,
-            v.y
+            x,
+            y
 
         );
 
-        const nobleTime=
+        if(
+            dist>
+            TWM.config.scanRadius
+        ){
 
-            dist*35;
+            return;
 
-        TWM.state.plans
-        .push({
+        }
 
-            coord:v.coord,
+        TWM.state.villages[
+            v[0]
+        ]={
 
-            owner:
-            v.owner?.name,
+            id:v[0],
 
-            morale:
-            v.morale,
+            coord:
+            x+'|'+y,
 
-            score:
-            v.targetScore,
+            x,
+            y,
 
-            nobleTime:
-            nobleTime.toFixed(1)
+            playerId:
+            v[4]||'0',
 
-        });
+            points:
+            parseInt(v[5])||0,
+
+            distance:dist,
+
+            morale:100,
+
+            targetScore:0,
+
+            finalScore:0,
+
+            frontline:false,
+
+            known:false,
+
+            stack:false,
+
+            offHub:false,
+
+            deadVillage:false
+
+        };
 
     });
 
 };
 
 /* =========================================================
-   BATTLE SIMULATION AI
+   LINK
 ========================================================= */
 
-TWM.Modules.Battle={};
+TWM.Modules.Link={};
 
-TWM.Modules.Battle.simulate=
-(v)=>{
+TWM.Modules.Link.run=
+()=>{
 
-    let chance=50;
+    const me=
+    game_data.player.name;
 
-    chance+=
-    (100-v.morale);
+    Object.values(
+        TWM.state.villages
+    ).forEach(v=>{
 
-    chance+=
-    (v.targetScore/5);
+        const p=
+        TWM.state.players[
+            v.playerId
+        ];
 
-    if(
-        v.owner?.profile==='DEAD'
-    ){
+        if(!p)return;
 
-        chance+=40;
+        v.owner=p;
 
-    }
+        if(
+            p.name===me
+        ){
 
-    if(v.frontline){
+            p.relation='own';
 
-        chance-=20;
+        }
 
-    }
-
-    chance=
-    Math.max(
-        1,
-        Math.min(
-            chance,
-            99
-        )
-    );
-
-    v.conquerChance=
-    chance;
+    });
 
 };
 
 /* =========================================================
-   STRATEGIC MAP AI
+   BEHAVIOR
 ========================================================= */
 
-TWM.Modules.StrategicMap={};
+TWM.Modules.Behavior={};
 
-TWM.Modules.StrategicMap.run=
+TWM.Modules.Behavior.run=
 ()=>{
 
     Object.values(
-        TWM.state.regions
-    ).forEach(r=>{
+        TWM.state.players
+    ).forEach(p=>{
 
-        r.type='neutral';
+        if(
+            p.points<5000 &&
+            p.villages<3
+        ){
 
-        if(r.enemy>15){
-
-            r.type='warzone';
-
-        }
-
-        if(r.offPower>50000){
-
-            r.type='offensive';
+            p.behavior='DEAD';
 
         }
 
-        if(r.defPower>100000){
+        else{
 
-            r.type='fortress';
+            p.behavior='ACTIVE';
 
         }
 
@@ -571,191 +862,969 @@ TWM.Modules.StrategicMap.run=
 };
 
 /* =========================================================
-   PLAYER INTEL MEMORY
+   REPORTS
 ========================================================= */
 
-TWM.Modules.Intel={};
+TWM.Modules.ReportEngine={};
 
-TWM.Modules.Intel.save=
-(player)=>{
+TWM.Modules.ReportEngine.scan=
+async()=>{
 
-    if(!player)return;
+    const html=
+    await TWM.Request.fetch(
 
-    TWM.state.intel[
-        player.name
-    ]={
+        '/game.php?village='+
+        game_data.village.id+
+        '&screen=report'
 
-        relation:
-        player.relation,
+    );
 
-        profile:
-        player.profile,
+    if(!html)return;
 
-        loot:
-        player.loot,
+    const doc=
+    new DOMParser()
+    .parseFromString(
+        html,
+        'text/html'
+    );
 
-        villages:
-        player.villages,
+    TWM.state.reportIntel={};
 
-        points:
-        player.points,
+    const rows=
+    doc.querySelectorAll('tr');
 
-        lastSeen:
-        Date.now()
+    rows.forEach(row=>{
 
-    };
+        const txt=
+        row.innerText||'';
+
+        const coord=
+        txt.match(
+            /\d+\|\d+/
+        )?.[0];
+
+        if(!coord)return;
+
+        if(
+            TWM.state
+            .reportIntel[
+                coord
+            ]
+        ){
+
+            return;
+
+        }
+
+        TWM.state.reportIntel[
+            coord
+        ]={
+
+            coord,
+
+            attack:
+            txt.includes('Atak'),
+
+            support:
+            txt.includes('Wsparcie'),
+
+            noble:
+            txt.includes('Szlachcic'),
+
+            raw:txt,
+
+            lastSeen:
+            Date.now()
+
+        };
+
+    });
 
 };
 
 /* =========================================================
-   OFF / DEF DETECTOR
+   LIVE WAR
 ========================================================= */
 
-TWM.Modules.Power={};
+TWM.Modules.LiveWar={};
 
-TWM.Modules.Power.run=
-(player)=>{
+TWM.Modules.LiveWar.scan=
+async()=>{
 
-    player.offensive=false;
+    const html=
+    await TWM.Request.fetch(
 
-    player.defensive=false;
+        '/game.php?screen=overview'
 
-    if(
-        player.ra>
-        player.ro*2
-    ){
+    );
 
-        player.offensive=true;
+    if(!html)return;
 
-    }
+    const doc=
+    new DOMParser()
+    .parseFromString(
+        html,
+        'text/html'
+    );
 
-    if(
-        player.ro>
-        player.ra*2
-    ){
+    TWM.state.war.attacks=[];
 
-        player.defensive=true;
+    const rows=
+    doc.querySelectorAll('tr');
 
-    }
+    rows.forEach(row=>{
 
-};
+        const txt=
+        row.innerText||'';
 
-/* =========================================================
-   OVERLAY v51
-========================================================= */
+        const coord=
+        txt.match(
+            /\d+\|\d+/
+        )?.[0];
 
-TWM.Modules.Overlay.run=
-()=>{
+        if(!coord)return;
 
-    $('.map_village')
-    .each(function(){
+        const time=
+        txt.match(
+            /(\d{2}):(\d{2}):(\d{2})/
+        );
 
-        const id=
-        $(this).data('id');
+        let arrival=0;
 
-        if(!id)return;
+        if(time){
 
-        const v=
-        TWM.state.villages[id];
+            const d=
+            new Date();
 
-        if(!v)return;
+            d.setHours(+time[1]);
+            d.setMinutes(+time[2]);
+            d.setSeconds(+time[3]);
 
-        $(this).css({
+            arrival=d.getTime();
 
-            outline:'',
-            filter:''
+        }
+
+        const hash=
+
+            coord+
+            '_'+
+            arrival+
+            '_'+
+            txt.length;
+
+        if(
+
+            TWM.state.war.attacks
+            .find(x=>
+
+                x.hash===hash
+
+            )
+
+        ){
+
+            return;
+
+        }
+
+        TWM.state.war.attacks
+        .push({
+
+            hash,
+
+            coord,
+
+            arrival,
+
+            noble:
+            txt.includes('Szlachcic'),
+
+            ram:
+            txt.includes('Taran'),
+
+            catapult:
+            txt.includes('Katapulta'),
+
+            support:
+            txt.includes('Wsparcie'),
+
+            raw:txt
 
         });
 
-        /* FRONTLINE */
+    });
 
-        if(v.frontline){
+};
 
-            $(this).css(
-                'outline',
-                '2px solid red'
+/* =========================================================
+   TRAINS
+========================================================= */
+
+TWM.Modules.Trains={};
+
+TWM.Modules.Trains.run=
+()=>{
+
+    TWM.state.war.trains=[];
+
+    const grouped={};
+
+    TWM.state.war.attacks
+    .forEach(a=>{
+
+        if(!a.arrival)return;
+
+        const key=
+
+            a.coord+
+            '_'+
+            Math.floor(
+                a.arrival/3000
             );
+
+        if(!grouped[key]){
+
+            grouped[key]=[];
 
         }
 
-        /* CONQUER */
+        grouped[key]
+        .push(a);
+
+    });
+
+    Object.values(grouped)
+    .forEach(g=>{
+
+        if(g.length<4)return;
+
+        const train={
+
+            coord:
+            g[0].coord,
+
+            size:g.length,
+
+            arrival:
+            g[0].arrival,
+
+            noble:false,
+
+            heavy:false,
+
+            fake:false,
+
+            priority:0
+
+        };
+
+        g.forEach(a=>{
+
+            if(a.noble){
+
+                train.noble=true;
+
+            }
+
+            if(
+                a.ram||
+                a.catapult
+            ){
+
+                train.heavy=true;
+
+            }
+
+        });
+
+        train.priority+=
+        train.size*10;
+
+        if(train.noble){
+
+            train.priority+=150;
+
+        }
+
+        if(train.heavy){
+
+            train.priority+=80;
+
+        }
 
         if(
-            v.targetScore>180
+            !train.noble &&
+            train.size>20
         ){
 
-            $(this).css(
-                'outline',
-                '2px solid purple'
-            );
+            train.fake=true;
 
         }
 
-        /* DEAD */
-
-        if(
-            v.owner?.profile==='DEAD'
-        ){
-
-            $(this).css(
-                'filter',
-                'grayscale(100%)'
-            );
-
-        }
-
-        /* FARMER */
-
-        if(
-            v.owner?.profile==='FARMER'
-        ){
-
-            $(this).css(
-                'outline',
-                '2px solid gold'
-            );
-
-        }
+        TWM.state.war
+        .trains
+        .push(train);
 
     });
 
 };
 
 /* =========================================================
-   MASTER RUN ADDITIONS
+   SCORE
 ========================================================= */
 
-await TWM.Modules.Troops.scan();
+TWM.Modules.Score={};
 
-await TWM.Modules.Support.scan();
+TWM.Modules.Score.run=
+()=>{
 
-TWM.Modules.FarmSync.scan();
+    Object.values(
+        TWM.state.villages
+    ).forEach(v=>{
 
-TWM.Modules.Known.run();
+        let s=0;
 
-TWM.Modules.RegionPower.run();
+        if(
 
-TWM.Modules.StrategicMap.run();
+            v.owner?.behavior
+            ==='DEAD'
 
-TWM.Modules.Planner.run();
+        ){
 
-Object.values(
-    TWM.state.villages
-).forEach(v=>{
+            s+=120;
 
-    TWM.Modules.Battle
-    .simulate(v);
+        }
 
-});
+        s+=
+        Math.max(
+            0,
+            100-v.morale
+        );
 
-Object.values(
-    TWM.state.players
-).forEach(p=>{
+        s-=
+        Math.floor(
+            v.distance||0
+        );
 
-    TWM.Modules.Power
-    .run(p);
+        if(v.frontline){
 
-    TWM.Modules.Intel
-    .save(p);
+            s+=50;
 
-});
+        }
+
+        if(v.deadVillage){
+
+            s+=100;
+
+        }
+
+        if(v.stack){
+
+            s-=120;
+
+        }
+
+        v.finalScore=
+        Math.floor(s);
+
+    });
+
+};
+
+/* =========================================================
+   STRATEGIST
+========================================================= */
+
+TWM.Modules.Strategist={};
+
+TWM.Modules.Strategist.run=
+()=>{
+
+    TWM.state.recommendations=
+
+    Object.values(
+        TWM.state.villages
+    )
+
+    .sort((a,b)=>
+
+        (b.finalScore||0)-
+
+        (a.finalScore||0)
+
+    )
+
+    .slice(0,20);
+
+};
+
+/* =========================================================
+   UI
+========================================================= */
+
+TWM.UI={};
+
+TWM.UI.safe=
+(html)=>{
+
+    $('#twm_content')
+    .html(html||'');
+
+};
+
+/* =========================================================
+   WAR TAB
+========================================================= */
+
+TWM.UI.renderWar=
+()=>{
+
+    const rows=
+
+    Object.values(
+        TWM.state.villages
+    )
+
+    .sort((a,b)=>
+
+        (b.finalScore||0)-
+
+        (a.finalScore||0)
+
+    )
+
+    .slice(
+        0,
+        TWM.config.maxRows
+    );
+
+    let html=`
+
+    <h2>
+    ⚔ WAR AI
+    </h2>
+
+    <table class="vis" width="100%">
+
+    <tr>
+
+    <th>DIST</th>
+    <th>COORD</th>
+    <th>PLAYER</th>
+    <th>SCORE</th>
+
+    </tr>
+
+    `;
+
+    rows.forEach(v=>{
+
+        html+=`
+
+        <tr>
+
+        <td>
+        ${(v.distance||0).toFixed(1)}
+        </td>
+
+        <td>
+        ${v.coord||'-'}
+        </td>
+
+        <td>
+        ${v.owner?.name||'-'}
+        </td>
+
+        <td>
+        ${v.finalScore||0}
+        </td>
+
+        </tr>
+
+        `;
+
+    });
+
+    html+=`</table>`;
+
+    TWM.UI.safe(html);
+
+};
+
+/* =========================================================
+   LIVE TAB
+========================================================= */
+
+TWM.UI.renderLive=
+()=>{
+
+    const trains=
+
+    TWM.state.war.trains
+
+    .sort((a,b)=>
+
+        b.priority-a.priority
+
+    );
+
+    let html=`
+
+    <h2>
+    👑 LIVE WAR
+    </h2>
+
+    <table class="vis" width="100%">
+
+    <tr>
+
+    <th>COORD</th>
+    <th>SIZE</th>
+    <th>NOBLE</th>
+    <th>PRIORITY</th>
+
+    </tr>
+
+    `;
+
+    trains.forEach(t=>{
+
+        html+=`
+
+        <tr>
+
+        <td>${t.coord}</td>
+
+        <td>${t.size}</td>
+
+        <td>
+        ${t.noble?'👑':''}
+        </td>
+
+        <td>
+        ${t.priority}
+        </td>
+
+        </tr>
+
+        `;
+
+    });
+
+    html+=`</table>`;
+
+    TWM.UI.safe(html);
+
+};
+
+/* =========================================================
+   PLAYERS TAB
+========================================================= */
+
+TWM.UI.renderPlayers=
+()=>{
+
+    const rows=
+
+    Object.values(
+        TWM.state.players
+    )
+
+    .sort((a,b)=>
+
+        b.points-a.points
+
+    )
+
+    .slice(0,300);
+
+    let html=`
+
+    <h2>
+    👤 PLAYERS
+    </h2>
+
+    <table class="vis" width="100%">
+
+    <tr>
+
+    <th>PLAYER</th>
+    <th>POINTS</th>
+    <th>VILLAGES</th>
+    <th>BEHAVIOR</th>
+
+    </tr>
+
+    `;
+
+    rows.forEach(p=>{
+
+        html+=`
+
+        <tr>
+
+        <td>${p.name}</td>
+
+        <td>${p.points}</td>
+
+        <td>${p.villages}</td>
+
+        <td>${p.behavior}</td>
+
+        </tr>
+
+        `;
+
+    });
+
+    html+=`</table>`;
+
+    TWM.UI.safe(html);
+
+};
+
+/* =========================================================
+   TARGETS TAB
+========================================================= */
+
+TWM.UI.renderTargets=
+()=>{
+
+    let html=`
+
+    <h2>
+    🎯 TARGETS
+    </h2>
+
+    <table class="vis" width="100%">
+
+    <tr>
+
+    <th>COORD</th>
+    <th>PLAYER</th>
+    <th>SCORE</th>
+
+    </tr>
+
+    `;
+
+    TWM.state.recommendations
+    .forEach(v=>{
+
+        html+=`
+
+        <tr>
+
+        <td>${v.coord}</td>
+
+        <td>${v.owner?.name||'-'}</td>
+
+        <td>${v.finalScore||0}</td>
+
+        </tr>
+
+        `;
+
+    });
+
+    html+=`</table>`;
+
+    TWM.UI.safe(html);
+
+};
+
+/* =========================================================
+   ALERTS TAB
+========================================================= */
+
+TWM.UI.renderAlerts=
+()=>{
+
+    let html=`
+
+    <h2>
+    🚨 ALERTS
+    </h2>
+
+    `;
+
+    TWM.state.war.trains
+    .forEach(t=>{
+
+        if(!t.noble)return;
+
+        html+=`
+
+        <div style="
+        padding:6px;
+        margin-bottom:4px;
+        background:#ffcccc;
+        border:1px solid red;
+        ">
+
+        👑 NOBLE TRAIN
+        →
+        ${t.coord}
+
+        </div>
+
+        `;
+
+    });
+
+    TWM.UI.safe(html);
+
+};
+
+/* =========================================================
+   TABS
+========================================================= */
+
+$(document).on(
+    'click',
+    '[data-tab]',
+    function(){
+
+        const tab=
+        $(this).data('tab');
+
+        TWM.state.currentTab=
+        tab;
+
+        switch(tab){
+
+            case 'war':
+
+                TWM.UI.renderWar();
+
+            break;
+
+            case 'livewar':
+
+                TWM.UI.renderLive();
+
+            break;
+
+            case 'players':
+
+                TWM.UI.renderPlayers();
+
+            break;
+
+            case 'targets':
+
+                TWM.UI.renderTargets();
+
+            break;
+
+            case 'alerts':
+
+                TWM.UI.renderAlerts();
+
+            break;
+
+        }
+
+    }
+
+);
+
+/* =========================================================
+   CLEANUP
+========================================================= */
+
+TWM.Modules.Cleanup={};
+
+TWM.Modules.Cleanup.run=
+()=>{
+
+    if(
+
+        TWM.Debug.logs.length>
+
+        250
+
+    ){
+
+        TWM.Debug.logs=
+
+        TWM.Debug.logs.slice(-250);
+
+    }
+
+};
+
+/* =========================================================
+   MAIN RUN
+========================================================= */
+
+TWM.run=
+async()=>{
+
+    if(
+        TWM.state.running
+    ){
+
+        return;
+
+    }
+
+    if(document.hidden){
+
+        return;
+
+    }
+
+    TWM.state.running=true;
+
+    try{
+
+        TWM.state.center=
+
+        TWM.Helpers.coord(
+
+            game_data.village.coord
+
+        );
+
+        await TWM.Modules
+        .Players
+        .scan();
+
+        await TWM.Modules
+        .Villages
+        .scan();
+
+        TWM.Modules
+        .Link
+        .run();
+
+        TWM.Modules
+        .Behavior
+        .run();
+
+        await TWM.Modules
+        .ReportEngine
+        .scan();
+
+        await TWM.Modules
+        .LiveWar
+        .scan();
+
+        TWM.Modules
+        .Trains
+        .run();
+
+        TWM.Modules
+        .Score
+        .run();
+
+        TWM.Modules
+        .Strategist
+        .run();
+
+        TWM.Modules
+        .Cleanup
+        .run();
+
+        switch(
+            TWM.state.currentTab
+        ){
+
+            case 'war':
+
+                TWM.UI.renderWar();
+
+            break;
+
+            case 'livewar':
+
+                TWM.UI.renderLive();
+
+            break;
+
+            case 'players':
+
+                TWM.UI.renderPlayers();
+
+            break;
+
+            case 'targets':
+
+                TWM.UI.renderTargets();
+
+            break;
+
+            case 'alerts':
+
+                TWM.UI.renderAlerts();
+
+            break;
+
+        }
+
+    }catch(e){
+
+        TWM.Debug.log(
+
+            'MAIN_ERROR',
+
+            'RUN',
+
+            e.message,
+
+            {
+
+                stack:e.stack
+
+            }
+
+        );
+
+    }finally{
+
+        TWM.state.running=false;
+
+    }
+
+};
+
+/* =========================================================
+   BUTTONS
+========================================================= */
+
+$('#twm_reload').on(
+    'click',
+    async()=>{
+
+        await TWM.run();
+
+    }
+
+);
+
+/* =========================================================
+   AUTO REFRESH
+========================================================= */
+
+TWM.state.interval=
+setInterval(async()=>{
+
+    if(
+        !TWM.state.running
+    ){
+
+        await TWM.run();
+
+    }
+
+},
+TWM.config.refresh);
+
+/* =========================================================
+   START
+========================================================= */
+
+await TWM.run();
+
+})();
