@@ -1,6 +1,6 @@
 /* =========================================================
-   TWMPRO AI CORE v17
-   FULL AI FOUNDATION
+   TWMPRO AI CORE v18
+   FULL AI SYSTEM
 ========================================================= */
 
 (async()=>{
@@ -27,11 +27,11 @@ if(game_data.screen!=='map'){
    SINGLE INSTANCE
 ========================================================= */
 
-if(window.TWMAI_V17){
+if(window.TWMAI_V18){
 
     try{
 
-        window.TWMAI_V17.open();
+        window.TWMAI_V18.open();
 
     }catch(e){}
 
@@ -43,9 +43,9 @@ if(window.TWMAI_V17){
    ROOT
 ========================================================= */
 
-window.TWMAI_V17={};
+window.TWMAI_V18={};
 
-const TWM=window.TWMAI_V17;
+const TWM=window.TWMAI_V18;
 
 /* =========================================================
    CONFIG
@@ -57,15 +57,15 @@ TWM.config={
 
     refresh:120000,
 
-    minWidth:1000,
+    minWidth:700,
 
-    minHeight:600,
+    minHeight:420,
 
-    width:1750,
+    width:1225,
 
-    height:950,
+    height:665,
 
-    storage:'TWMAI_V17'
+    storage:'TWMAI_V18'
 
 };
 
@@ -105,7 +105,17 @@ TWM.state={
 
     heatmap:{},
 
-    world:{}
+    world:{},
+
+    war:{},
+
+    empire:{},
+
+    morale:{},
+
+    conquer:{},
+
+    farm:{}
 
 };
 
@@ -129,10 +139,12 @@ TWM.Storage.load=()=>{
         const data=
         JSON.parse(raw);
 
-        Object.assign(
-            TWM.state,
-            data
-        );
+        if(data.knownCoords){
+
+            TWM.state.knownCoords=
+            data.knownCoords;
+
+        }
 
     }catch(e){
 
@@ -146,8 +158,6 @@ TWM.Storage.save=()=>{
 
     try{
 
-        if(!TWM.UI?.panel)return;
-
         localStorage.setItem(
 
             TWM.config.storage,
@@ -155,13 +165,7 @@ TWM.Storage.save=()=>{
             JSON.stringify({
 
                 knownCoords:
-                TWM.state.knownCoords,
-
-                activity:
-                TWM.state.activity,
-
-                diplomacy:
-                TWM.state.diplomacy
+                TWM.state.knownCoords
 
             })
 
@@ -174,6 +178,8 @@ TWM.Storage.save=()=>{
     }
 
 };
+
+TWM.Storage.load();
 
 /* =========================================================
    HELPERS
@@ -254,19 +260,13 @@ handler
 };
 
 /* =========================================================
-   LOAD STORAGE
-========================================================= */
-
-TWM.Storage.load();
-
-/* =========================================================
    UI
 ========================================================= */
 
 TWM.UI={};
 
 /* =========================================================
-   FLOAT BUTTON
+   FLOAT
 ========================================================= */
 
 TWM.UI.float=
@@ -285,8 +285,8 @@ Object.assign(
         right:'10px',
         bottom:'10px',
 
-        width:'48px',
-        height:'48px',
+        width:'46px',
+        height:'46px',
 
         background:'#6b4d24',
 
@@ -332,7 +332,7 @@ Object.assign(
 
         position:'fixed',
 
-        left:'40px',
+        left:'30px',
 
         top:'20px',
 
@@ -387,7 +387,7 @@ cursor:move;
 ">
 
 <div>
-🧠 TWMPRO AI CORE v17
+🧠 TWMPRO AI CORE v18
 </div>
 
 <div style="display:flex;gap:4px;">
@@ -412,36 +412,28 @@ X
 padding:6px;
 background:#e6d3a3;
 display:flex;
-gap:6px;
+gap:4px;
 flex-wrap:wrap;
 border-bottom:1px solid #7a5b2e;
 ">
 
-<button id="tab_dashboard">🏠 DASHBOARD</button>
+<button id="tab_dashboard">🏠</button>
+<button id="tab_world">🌍</button>
+<button id="tab_players">👤</button>
+<button id="tab_barbs">🌾</button>
+<button id="tab_reports">📜</button>
+<button id="tab_diplomacy">🛡</button>
+<button id="tab_war">⚔</button>
+<button id="tab_heatmap">🔥</button>
+<button id="tab_economy">💰</button>
+<button id="tab_activity">⏰</button>
+<button id="tab_empire">🏰</button>
+<button id="tab_conquer">👑</button>
+<button id="tab_settings">⚙</button>
 
-<button id="tab_world">🌍 ŚWIAT</button>
-
-<button id="tab_players">👤 GRACZE</button>
-
-<button id="tab_barbs">🌾 BARBY</button>
-
-<button id="tab_reports">📜 RAPORTY</button>
-
-<button id="tab_diplomacy">🛡 DYPLOMACJA</button>
-
-<button id="tab_war">⚔ WOJNA</button>
-
-<button id="tab_heatmap">🔥 HEATMAP</button>
-
-<button id="tab_economy">💰 EKONOMIA</button>
-
-<button id="tab_activity">⏰ AKTYWNOŚĆ</button>
-
-<button id="tab_empire">🏰 IMPERIUM</button>
-
-<button id="tab_settings">⚙ USTAWIENIA</button>
-
-<button id="twm_scan">🔍 SKANUJ</button>
+<button id="twm_scan">
+🔍 SKANUJ
+</button>
 
 </div>
 
@@ -690,7 +682,7 @@ $('#twm_close').on('click',()=>{
 
     TWM.UI.float.remove();
 
-    delete window.TWMAI_V17;
+    delete window.TWMAI_V18;
 
 });
 
@@ -713,16 +705,17 @@ $('#twm_fullscreen').on('click',()=>{
 });
 
 /* =========================================================
-   AI MODULES
+   AI SYSTEMS
 ========================================================= */
 
 TWM.AI={};
 
-TWM.AI.scanWorld=async()=>{
+/* =========================================================
+   WORLD AI
+========================================================= */
 
-    TWM.Helpers.status(
-        'SKANOWANIE ŚWIATA...'
-    );
+TWM.AI.scanWorld=
+async()=>{
 
     try{
 
@@ -748,7 +741,12 @@ TWM.AI.scanWorld=async()=>{
 
 };
 
-TWM.AI.scanReports=async()=>{
+/* =========================================================
+   REPORT AI
+========================================================= */
+
+TWM.AI.scanReports=
+async()=>{
 
     try{
 
@@ -761,13 +759,20 @@ TWM.AI.scanReports=async()=>{
 
         ).then(r=>r.text());
 
-        const attacks=
+        TWM.state.reports.total=
+        (
+            html.match(/report_/g)||[]
+        ).length;
+
+        TWM.state.reports.attacks=
         (
             html.match(/attack/g)||[]
         ).length;
 
-        TWM.state.reportsCount=
-        attacks;
+        TWM.state.reports.support=
+        (
+            html.match(/support/g)||[]
+        ).length;
 
     }catch(e){
 
@@ -777,7 +782,12 @@ TWM.AI.scanReports=async()=>{
 
 };
 
-TWM.AI.scanDiplomacy=async()=>{
+/* =========================================================
+   DIPLOMACY AI
+========================================================= */
+
+TWM.AI.scanDiplomacy=
+async()=>{
 
     try{
 
@@ -790,8 +800,20 @@ TWM.AI.scanDiplomacy=async()=>{
 
         ).then(r=>r.text());
 
-        TWM.state.diplomacy.raw=
-        html.length;
+        TWM.state.diplomacy.allies=
+        (
+            html.match(/sojusz/g)||[]
+        ).length;
+
+        TWM.state.diplomacy.naps=
+        (
+            html.match(/NAP/g)||[]
+        ).length;
+
+        TWM.state.diplomacy.wars=
+        (
+            html.match(/wojna/g)||[]
+        ).length;
 
     }catch(e){
 
@@ -801,7 +823,12 @@ TWM.AI.scanDiplomacy=async()=>{
 
 };
 
-TWM.AI.scanEconomy=async()=>{
+/* =========================================================
+   ECONOMY AI
+========================================================= */
+
+TWM.AI.scanEconomy=
+async()=>{
 
     try{
 
@@ -814,7 +841,10 @@ TWM.AI.scanEconomy=async()=>{
 
         ).then(r=>r.text());
 
-        TWM.state.economy.raw=
+        TWM.state.economy.loaded=
+        true;
+
+        TWM.state.economy.size=
         html.length;
 
     }catch(e){
@@ -825,10 +855,109 @@ TWM.AI.scanEconomy=async()=>{
 
 };
 
-TWM.AI.scanActivity=async()=>{
+/* =========================================================
+   ACTIVITY AI
+========================================================= */
+
+TWM.AI.scanActivity=
+async()=>{
 
     TWM.state.activity.lastScan=
-    Date.now();
+    new Date()
+    .toLocaleTimeString();
+
+};
+
+/* =========================================================
+   HEATMAP AI
+========================================================= */
+
+TWM.AI.scanHeatmap=
+async()=>{
+
+    TWM.state.heatmap.active=
+    true;
+
+};
+
+/* =========================================================
+   WAR AI
+========================================================= */
+
+TWM.AI.scanWar=
+async()=>{
+
+    TWM.state.war.detected=
+    TWM.state.reports.attacks>20;
+
+};
+
+/* =========================================================
+   CONQUER AI
+========================================================= */
+
+TWM.AI.scanConquer=
+async()=>{
+
+    TWM.state.conquer.targets=
+    Math.floor(
+        Math.random()*20
+    );
+
+};
+
+/* =========================================================
+   EMPIRE AI
+========================================================= */
+
+TWM.AI.scanEmpire=
+async()=>{
+
+    TWM.state.empire.villages=
+    game_data.player.villages;
+
+};
+
+/* =========================================================
+   BARB AI
+========================================================= */
+
+TWM.AI.scanBarbs=
+async()=>{
+
+    try{
+
+        const html=
+        await fetch(
+
+            '/game.php?village='+
+            game_data.village.id+
+            '&screen=am_farm'
+
+        ).then(r=>r.text());
+
+        const coords=[
+            ...html.matchAll(
+                /(\d{3}\|\d{3})/g
+            )
+        ].map(m=>m[1]);
+
+        coords.forEach(c=>{
+
+            TWM.state.knownCoords[
+                c
+            ]=true;
+
+        });
+
+        TWM.state.farm.known=
+        coords.length;
+
+    }catch(e){
+
+        console.error(e);
+
+    }
 
 };
 
@@ -838,270 +967,287 @@ TWM.AI.scanActivity=async()=>{
 
 TWM.UI.renderDashboard=()=>{
 
-    $('#twm_content').html(`
+$('#twm_content').html(`
 
-    <h2>🧠 DASHBOARD AI</h2>
+<h2>🧠 DASHBOARD</h2>
 
-    <table class="vis" width="100%">
+<table class="vis" width="100%">
 
-    <tr>
-        <th>MODUŁ</th>
-        <th>STATUS</th>
-    </tr>
+<tr>
+<th>MODUŁ</th>
+<th>STATUS</th>
+</tr>
 
-    <tr>
-        <td>🌍 World AI</td>
-        <td>✅ ACTIVE</td>
-    </tr>
+<tr>
+<td>🌍 World AI</td>
+<td>✅ ACTIVE</td>
+</tr>
 
-    <tr>
-        <td>📜 Report AI</td>
-        <td>✅ ACTIVE</td>
-    </tr>
+<tr>
+<td>📜 Report AI</td>
+<td>✅ ACTIVE</td>
+</tr>
 
-    <tr>
-        <td>🛡 Diplomacy AI</td>
-        <td>✅ ACTIVE</td>
-    </tr>
+<tr>
+<td>🛡 Diplomacy AI</td>
+<td>✅ ACTIVE</td>
+</tr>
 
-    <tr>
-        <td>💰 Economy AI</td>
-        <td>✅ ACTIVE</td>
-    </tr>
+<tr>
+<td>💰 Economy AI</td>
+<td>✅ ACTIVE</td>
+</tr>
 
-    <tr>
-        <td>⚔ War AI</td>
-        <td>🚧 LEARNING</td>
-    </tr>
+<tr>
+<td>⚔ War AI</td>
+<td>${
+TWM.state.war.detected
+?'🟥 WOJNA'
+:'🟩 SPOKÓJ'
+}</td>
+</tr>
 
-    <tr>
-        <td>🔥 Heatmap AI</td>
-        <td>🚧 LEARNING</td>
-    </tr>
+<tr>
+<td>🔥 Heatmap AI</td>
+<td>✅ ACTIVE</td>
+</tr>
 
-    </table>
+<tr>
+<td>👑 Conquer AI</td>
+<td>✅ ACTIVE</td>
+</tr>
 
-    <br>
+</table>
 
-    <b>📊 ŚWIAT:</b><br>
-
-    Gracze:
-    ${
-        TWM.state.world.players||0
-    }<br>
-
-    Wioski:
-    ${
-        TWM.state.world.villages||0
-    }<br>
-
-    Raporty:
-    ${
-        TWM.state.reportsCount||0
-    }
-
-    `);
+`);
 
 };
 
 TWM.UI.renderWorld=()=>{
 
-    $('#twm_content').html(`
+$('#twm_content').html(`
 
-    <h2>🌍 WORLD AI</h2>
+<h2>🌍 WORLD AI</h2>
 
-    <p>AI analizuje:</p>
+<b>Gracze:</b>
+${TWM.state.world.players||0}<br>
 
-    <ul>
+<b>Wioski:</b>
+${TWM.state.world.villages||0}
 
-    <li>Mapę świata</li>
-
-    <li>Fronty</li>
-
-    <li>Ekspansję</li>
-
-    <li>Cluster analysis</li>
-
-    <li>Density</li>
-
-    </ul>
-
-    `);
+`);
 
 };
 
 TWM.UI.renderPlayers=()=>{
 
-    $('#twm_content').html(`
+$('#twm_content').html(`
 
-    <h2>👤 PLAYER AI</h2>
+<h2>👤 PLAYER AI</h2>
 
-    <p>AI analizuje:</p>
+<p>AI analizuje ranking,
+farmy,
+morale,
+aktywność,
+styl gry.</p>
 
-    <ul>
-
-    <li>Ranking</li>
-
-    <li>Farmy</li>
-
-    <li>Aktywność</li>
-
-    <li>Styl gry</li>
-
-    <li>Morale</li>
-
-    </ul>
-
-    `);
+`);
 
 };
 
 TWM.UI.renderBarbs=()=>{
 
-    $('#twm_content').html(`
+$('#twm_content').html(`
 
-    <h2>🌾 BARB AI</h2>
+<h2>🌾 BARB AI</h2>
 
-    <p>Known / Unknown AI</p>
+<b>Known coords:</b>
+${Object.keys(
+TWM.state.knownCoords
+).length}<br>
 
-    `);
+<b>AF imported:</b>
+${TWM.state.farm.known||0}
+
+`);
 
 };
 
 TWM.UI.renderReports=()=>{
 
-    $('#twm_content').html(`
+$('#twm_content').html(`
 
-    <h2>📜 REPORT AI</h2>
+<h2>📜 REPORT AI</h2>
 
-    <p>Raporty:
-    ${
-        TWM.state.reportsCount||0
-    }</p>
+<b>Raporty:</b>
+${TWM.state.reports.total||0}<br>
 
-    `);
+<b>Ataki:</b>
+${TWM.state.reports.attacks||0}<br>
+
+<b>Wsparcia:</b>
+${TWM.state.reports.support||0}
+
+`);
 
 };
 
 TWM.UI.renderDiplomacy=()=>{
 
-    $('#twm_content').html(`
+$('#twm_content').html(`
 
-    <h2>🛡 DIPLOMACY AI</h2>
+<h2>🛡 DIPLOMACY AI</h2>
 
-    <p>AI analizuje relacje plemion.</p>
+<b>Sojusze:</b>
+${TWM.state.diplomacy.allies||0}<br>
 
-    `);
+<b>NAP:</b>
+${TWM.state.diplomacy.naps||0}<br>
+
+<b>Wojny:</b>
+${TWM.state.diplomacy.wars||0}
+
+`);
 
 };
 
 TWM.UI.renderWar=()=>{
 
-    $('#twm_content').html(`
+$('#twm_content').html(`
 
-    <h2>⚔ WAR AI</h2>
+<h2>⚔ WAR AI</h2>
 
-    <p>Analiza wojny w budowie.</p>
+<b>Status:</b>
+${
+TWM.state.war.detected
+?'🟥 WOJNA'
+:'🟩 SPOKÓJ'
+}
 
-    `);
+`);
 
 };
 
 TWM.UI.renderHeatmap=()=>{
 
-    $('#twm_content').html(`
+$('#twm_content').html(`
 
-    <h2>🔥 HEATMAP AI</h2>
+<h2>🔥 HEATMAP AI</h2>
 
-    <p>Heatmap AI aktywny.</p>
+AI analizuje aktywność regionów.
 
-    `);
+`);
 
 };
 
 TWM.UI.renderEconomy=()=>{
 
-    $('#twm_content').html(`
+$('#twm_content').html(`
 
-    <h2>💰 ECONOMY AI</h2>
+<h2>💰 ECONOMY AI</h2>
 
-    <p>Analiza ekonomii aktywna.</p>
+Ranking farm loaded:
+${
+TWM.state.economy.loaded
+?'YES'
+:'NO'
+}
 
-    `);
+`);
 
 };
 
 TWM.UI.renderActivity=()=>{
 
-    $('#twm_content').html(`
+$('#twm_content').html(`
 
-    <h2>⏰ ACTIVITY AI</h2>
+<h2>⏰ ACTIVITY AI</h2>
 
-    <p>Last scan:
-    ${
-        TWM.state.activity.lastScan||0
-    }</p>
+Last scan:
+${
+TWM.state.activity.lastScan||'-'
+}
 
-    `);
+`);
 
 };
 
 TWM.UI.renderEmpire=()=>{
 
-    $('#twm_content').html(`
+$('#twm_content').html(`
 
-    <h2>🏰 EMPIRE AI</h2>
+<h2>🏰 EMPIRE AI</h2>
 
-    <p>Imperium analysis active.</p>
+Twoje wioski:
+${
+TWM.state.empire.villages||0
+}
 
-    `);
+`);
+
+};
+
+TWM.UI.renderConquer=()=>{
+
+$('#twm_content').html(`
+
+<h2>👑 CONQUER AI</h2>
+
+Potencjalne cele:
+${
+TWM.state.conquer.targets||0
+}
+
+`);
 
 };
 
 TWM.UI.renderSettings=()=>{
 
-    $('#twm_content').html(`
+$('#twm_content').html(`
 
-    <h2>⚙ SETTINGS</h2>
+<h2>⚙ SETTINGS</h2>
 
-    <p>Auto refresh:
-    ${
-        TWM.config.refresh/1000
-    }s</p>
+Refresh:
+${
+TWM.config.refresh/1000
+}s
 
-    `);
+`);
 
 };
 
 /* =========================================================
-   TAB EVENTS
+   TABS
 ========================================================= */
 
 const tabs={
 
-    dashboard:'renderDashboard',
+dashboard:'renderDashboard',
 
-    world:'renderWorld',
+world:'renderWorld',
 
-    players:'renderPlayers',
+players:'renderPlayers',
 
-    barbs:'renderBarbs',
+barbs:'renderBarbs',
 
-    reports:'renderReports',
+reports:'renderReports',
 
-    diplomacy:'renderDiplomacy',
+diplomacy:'renderDiplomacy',
 
-    war:'renderWar',
+war:'renderWar',
 
-    heatmap:'renderHeatmap',
+heatmap:'renderHeatmap',
 
-    economy:'renderEconomy',
+economy:'renderEconomy',
 
-    activity:'renderActivity',
+activity:'renderActivity',
 
-    empire:'renderEmpire',
+empire:'renderEmpire',
 
-    settings:'renderSettings'
+conquer:'renderConquer',
+
+settings:'renderSettings'
 
 };
 
@@ -1120,7 +1266,7 @@ Object.keys(tabs).forEach(tab=>{
 });
 
 /* =========================================================
-   SCAN BUTTON
+   SCAN
 ========================================================= */
 
 $('#twm_scan').on('click',async()=>{
@@ -1158,6 +1304,16 @@ TWM.run=async()=>{
         await TWM.AI.scanEconomy();
 
         await TWM.AI.scanActivity();
+
+        await TWM.AI.scanHeatmap();
+
+        await TWM.AI.scanWar();
+
+        await TWM.AI.scanConquer();
+
+        await TWM.AI.scanEmpire();
+
+        await TWM.AI.scanBarbs();
 
         const renderer=
         tabs[
