@@ -3,8 +3,7 @@
 'use strict';
 
 /* =========================================
-   TWMPRO v7
-   PLAYER + BARB ANALYZER
+   TWMPRO v8
 ========================================= */
 
 /* =========================================
@@ -21,7 +20,7 @@ window.TWMPRO_RUNNING=true;
    STORAGE
 ========================================= */
 
-const STORAGE='TWMPRO_V7';
+const STORAGE='TWMPRO_V8';
 
 /* =========================================
    CONFIG
@@ -33,17 +32,16 @@ radius:20,
 
 panelX:100,
 panelY:40,
-panelW:1000,
+panelW:950,
 panelH:600,
 
 showBarbs:true,
 showPlayers:true,
 
-filterFresh:false,
-filterOld:false,
+showKnown:true,
+showUnknown:true,
 
-filterInactive:false,
-filterActive:false
+sort:'distance'
 
 };
 
@@ -85,8 +83,16 @@ let villages=[];
 let players={};
 let allies={};
 
-let playerActivity={};
-let barbInfo={};
+let knownBarbs={};
+
+try{
+
+knownBarbs=
+JSON.parse(
+localStorage.getItem('TWMPRO_KNOWN_BARBS')||'{}'
+);
+
+}catch(e){}
 
 /* =========================================
    EVENTS
@@ -141,7 +147,7 @@ font-weight:bold;
 font-size:14px;
 ">
 
-TWMPRO v7
+TWMPRO v8
 
 </div>
 
@@ -193,33 +199,17 @@ PLAYERS
 <label>
 <input
 type="checkbox"
-id="tw_fresh"
-${cfg.filterFresh?'checked':''}>
-FRESH
+id="tw_known"
+${cfg.showKnown?'checked':''}>
+KNOWN
 </label>
 
 <label>
 <input
 type="checkbox"
-id="tw_old"
-${cfg.filterOld?'checked':''}>
-OLD
-</label>
-
-<label>
-<input
-type="checkbox"
-id="tw_inactive"
-${cfg.filterInactive?'checked':''}>
-INACTIVE
-</label>
-
-<label>
-<input
-type="checkbox"
-id="tw_active"
-${cfg.filterActive?'checked':''}>
-ACTIVE
+id="tw_unknown"
+${cfg.showUnknown?'checked':''}>
+NEW
 </label>
 
 </div>
@@ -276,6 +266,15 @@ return{
 x:+c[0],
 y:+c[1]
 };
+
+}
+
+function saveKnown(){
+
+localStorage.setItem(
+'TWMPRO_KNOWN_BARBS',
+JSON.stringify(knownBarbs)
+);
 
 }
 
@@ -399,6 +398,12 @@ distance:d
 
 }
 
+/* SORT BY DISTANCE */
+
+villages.sort(
+(a,b)=>a.distance-b.distance
+);
+
 setStatus(
 'Loaded '+villages.length
 );
@@ -408,128 +413,16 @@ renderTable();
 }
 
 /* =========================================
-   PLAYER CHECK
+   MARK KNOWN
 ========================================= */
 
-window.TWMPRO_CHECK_PLAYER=
-async(playerId,name)=>{
+window.TWMPRO_TOGGLE_BARB=id=>{
 
-setStatus(
-'Checking '+name
-);
+knownBarbs[id]=!knownBarbs[id];
 
-try{
-
-/* =====================================
-   TWSTATS URL
-===================================== */
-
-const world=
-game_data.world;
-
-const url=
-`https://${world}.twstats.com/pl${world.replace('pl','')}/index.php?page=player&id=${playerId}`;
-
-/* =====================================
-   OPEN TAB
-===================================== */
-
-window.open(url,'_blank');
-
-/* =====================================
-   SIMPLE AI
-===================================== */
-
-const p=players[playerId];
-
-let active='ACTIVE';
-
-if(
-p.villages<3 &&
-p.points<3000
-){
-active='INACTIVE';
-}
-
-playerActivity[playerId]={
-
-day1:'+0',
-day2:'+0',
-week:'+0',
-
-status:active
-
-};
+saveKnown();
 
 renderTable();
-
-setStatus(
-'Done'
-);
-
-}catch(e){
-
-setStatus(
-'TWStats error'
-);
-
-}
-
-};
-
-/* =========================================
-   BARB CHECK
-========================================= */
-
-window.TWMPRO_CHECK_BARB=
-async(villageId)=>{
-
-setStatus(
-'Checking barb'
-);
-
-try{
-
-const url=
-`/game.php?village=${game_data.village.id}&screen=info_village&id=${villageId}`;
-
-const html=
-await fetch(url)
-.then(r=>r.text());
-
-/* =====================================
-   LAST ATTACK
-===================================== */
-
-let status='OLD';
-
-if(
-html.includes('Ostatni atak')
-){
-
-status='FRESH';
-
-}
-
-barbInfo[villageId]={
-
-status
-
-};
-
-renderTable();
-
-setStatus(
-'Barb analyzed'
-);
-
-}catch(e){
-
-setStatus(
-'Barb error'
-);
-
-}
 
 };
 
@@ -554,47 +447,22 @@ return false;
 if(!isBarb&&!cfg.showPlayers)
 return false;
 
-const p=players[v.playerId];
+if(isBarb){
 
-const activity=
-playerActivity[v.playerId];
+const known=
+!!knownBarbs[v.id];
 
-const barb=
-barbInfo[v.id];
-
-if(
-cfg.filterInactive &&
-activity &&
-activity.status!=='INACTIVE'
-){
+if(!cfg.showKnown&&known)
 return false;
-}
 
-if(
-cfg.filterActive &&
-activity &&
-activity.status!=='ACTIVE'
-){
+if(!cfg.showUnknown&&!known)
 return false;
-}
 
-if(
-cfg.filterFresh &&
-barb &&
-barb.status!=='FRESH'
-){
-return false;
-}
-
-if(
-cfg.filterOld &&
-barb &&
-barb.status!=='OLD'
-){
-return false;
 }
 
 if(!search)return true;
+
+const p=players[v.playerId];
 
 return(
 v.name.toLowerCase().includes(search) ||
@@ -625,15 +493,31 @@ font-size:11px;
 background:#111;
 position:sticky;
 top:0;
+z-index:5;
 ">
 
-<th>PLAYER</th>
+<th id="sort_player"
+style="cursor:pointer">
+PLAYER
+</th>
+
 <th>COORD</th>
-<th>D</th>
-<th>PTS</th>
-<th>ACTIVITY</th>
-<th>BARB</th>
-<th>ACTIONS</th>
+
+<th id="sort_dist"
+style="cursor:pointer">
+DIST
+</th>
+
+<th id="sort_points"
+style="cursor:pointer">
+PTS
+</th>
+
+<th>ALLY</th>
+
+<th>STATUS</th>
+
+<th>ACTION</th>
 
 </tr>
 `;
@@ -642,35 +526,35 @@ data.forEach(v=>{
 
 const p=players[v.playerId];
 
-const activity=
-playerActivity[v.playerId];
+const ally=
+allies[p?.ally];
 
-const barb=
-barbInfo[v.id];
+const isBarb=!p;
+
+const known=
+!!knownBarbs[v.id];
 
 let bg='';
 
-if(!p){
+if(isBarb){
 
-bg='rgba(120,120,120,.10)';
+bg=known
+?'rgba(255,255,0,.10)'
+:'rgba(0,255,0,.10)';
 
-}
+}else{
 
-if(
-activity &&
-activity.status==='INACTIVE'
-){
-
-bg='rgba(0,255,0,.12)';
+bg='rgba(255,0,0,.06)';
 
 }
 
-if(
-barb &&
-barb.status==='FRESH'
-){
+let status='';
 
-bg='rgba(255,255,0,.10)';
+if(isBarb){
+
+status=known
+?'🟡 KNOWN'
+:'🟢 NEW';
 
 }
 
@@ -690,7 +574,13 @@ ${p?p.name:'BARB'}
 <a
 href="/game.php?village=${game_data.village.id}&screen=map#${v.x};${v.y}"
 target="_blank"
-style="color:#6cf">
+style="color:#6cf"
+onclick="
+if(!${!p}){
+return true;
+}
+TWMPRO_TOGGLE_BARB('${v.id}');
+">
 
 ${v.x}|${v.y}
 
@@ -707,49 +597,27 @@ ${v.points}
 </td>
 
 <td>
-
-${
-activity
-?`
-${activity.status}<br>
-24h ${activity.day1}<br>
-48h ${activity.day2}<br>
-7d ${activity.week}
-`
-:''}
-
+${ally?ally.tag:''}
 </td>
 
 <td>
-
-${barb?barb.status:''}
-
+${status}
 </td>
 
 <td>
 
 ${
-p
+isBarb
 ?`
 <button
 onclick="
-TWMPRO_CHECK_PLAYER(
-'${p.id}',
-'${p.name}'
-)
+TWMPRO_TOGGLE_BARB('${v.id}')
 ">
-CHECK
+${known?'UNMARK':'MARK'}
 </button>
 `
 :`
-<button
-onclick="
-TWMPRO_CHECK_BARB(
-'${v.id}'
-)
-">
-SCAN BARB
-</button>
+-
 `
 }
 
@@ -764,6 +632,51 @@ html+=`</table>`;
 
 document.querySelector('#tw_table')
 .innerHTML=html;
+
+/* =====================================
+   SORT EVENTS
+===================================== */
+
+document.querySelector('#sort_dist')
+.onclick=()=>{
+
+villages.sort(
+(a,b)=>a.distance-b.distance
+);
+
+renderTable();
+
+};
+
+document.querySelector('#sort_points')
+.onclick=()=>{
+
+villages.sort(
+(a,b)=>b.points-a.points
+);
+
+renderTable();
+
+};
+
+document.querySelector('#sort_player')
+.onclick=()=>{
+
+villages.sort((a,b)=>{
+
+const pa=
+players[a.playerId]?.name||'BARB';
+
+const pb=
+players[b.playerId]?.name||'BARB';
+
+return pa.localeCompare(pb);
+
+});
+
+renderTable();
+
+};
 
 }
 
@@ -808,11 +721,11 @@ renderTable();
 );
 
 addListener(
-document.querySelector('#tw_fresh'),
+document.querySelector('#tw_known'),
 'change',
 e=>{
 
-cfg.filterFresh=e.target.checked;
+cfg.showKnown=e.target.checked;
 save();
 renderTable();
 
@@ -820,35 +733,11 @@ renderTable();
 );
 
 addListener(
-document.querySelector('#tw_old'),
+document.querySelector('#tw_unknown'),
 'change',
 e=>{
 
-cfg.filterOld=e.target.checked;
-save();
-renderTable();
-
-}
-);
-
-addListener(
-document.querySelector('#tw_inactive'),
-'change',
-e=>{
-
-cfg.filterInactive=e.target.checked;
-save();
-renderTable();
-
-}
-);
-
-addListener(
-document.querySelector('#tw_active'),
-'change',
-e=>{
-
-cfg.filterActive=e.target.checked;
+cfg.showUnknown=e.target.checked;
 save();
 renderTable();
 
@@ -932,9 +821,7 @@ panel.remove();
 
 delete window.TWMPRO_RUNNING;
 delete window.TWMPRO_DESTROY;
-
-delete window.TWMPRO_CHECK_PLAYER;
-delete window.TWMPRO_CHECK_BARB;
+delete window.TWMPRO_TOGGLE_BARB;
 
 }
 
