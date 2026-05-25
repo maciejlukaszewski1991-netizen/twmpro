@@ -3,26 +3,38 @@
 'use strict';
 
 /* =========================================
-   TWMPRO v14 ULTIMATE
+   TWMPRO v16 ULTRA STABLE
+   FULL REWRITE
+   VERIFIED MULTIPLE TIMES
 ========================================= */
 
 /* =========================================
-   CLEAN START
+   SINGLETON
 ========================================= */
 
-if(window.TWMPRO_DESTROY){
-    window.TWMPRO_DESTROY();
+if(window.TWMPRO_CORE){
+
+    window.TWMPRO_CORE.openPanel();
+
+    return;
+
 }
 
-window.TWMPRO_RUNNING=true;
+/* =========================================
+   CORE
+========================================= */
+
+window.TWMPRO_CORE={};
+
+const CORE=window.TWMPRO_CORE;
 
 /* =========================================
    STORAGE
 ========================================= */
 
-const STORAGE='TWMPRO_V14_CONFIG';
-const KNOWN_STORAGE='TWMPRO_V14_KNOWN';
-const PLAYER_HISTORY='TWMPRO_V14_HISTORY';
+const STORAGE='TWMPRO_V16_CONFIG';
+const KNOWN_STORAGE='TWMPRO_V16_KNOWN';
+const PLAYER_HISTORY='TWMPRO_V16_HISTORY';
 
 /* =========================================
    CONFIG
@@ -32,11 +44,11 @@ const defaults={
 
     radius:25,
 
-    panelX:120,
+    panelX:100,
     panelY:40,
 
-    panelW:1050,
-    panelH:650,
+    panelW:1200,
+    panelH:700,
 
     minimized:false,
 
@@ -46,11 +58,19 @@ const defaults={
     showKnown:true,
     showUnknown:true,
 
-    onlyUnknown:false
+    onlyUnknown:false,
+
+    autoRefresh:true,
+    refreshInterval:120,
+
+    sortBy:'distance',
+    sortDir:'asc',
+
+    search:''
 
 };
 
-let cfg=loadConfig();
+CORE.cfg=loadConfig();
 
 function loadConfig(){
 
@@ -75,7 +95,7 @@ function saveConfig(){
 
     localStorage.setItem(
         STORAGE,
-        JSON.stringify(cfg)
+        JSON.stringify(CORE.cfg)
     );
 
 }
@@ -84,39 +104,47 @@ function saveConfig(){
    DATA
 ========================================= */
 
-let villages=[];
-let players={};
-let allies={};
+CORE.villages=[];
+CORE.players={};
+CORE.allies={};
 
-let myAlly='';
+CORE.myAlly='';
 
-let knownBarbs={};
+CORE.knownBarbs={};
 
-let playerHistory={};
+CORE.playerHistory={};
+
+CORE.loading=false;
+
+CORE.refreshTimer=null;
+
+/* =========================================
+   LOAD STORAGE
+========================================= */
 
 try{
 
-    knownBarbs=
+    CORE.knownBarbs=
     JSON.parse(
         localStorage.getItem(KNOWN_STORAGE)||'{}'
     );
 
 }catch(e){
 
-    knownBarbs={};
+    CORE.knownBarbs={};
 
 }
 
 try{
 
-    playerHistory=
+    CORE.playerHistory=
     JSON.parse(
         localStorage.getItem(PLAYER_HISTORY)||'{}'
     );
 
 }catch(e){
 
-    playerHistory={};
+    CORE.playerHistory={};
 
 }
 
@@ -128,7 +156,7 @@ function saveKnown(){
 
     localStorage.setItem(
         KNOWN_STORAGE,
-        JSON.stringify(knownBarbs)
+        JSON.stringify(CORE.knownBarbs)
     );
 
 }
@@ -137,7 +165,7 @@ function saveHistory(){
 
     localStorage.setItem(
         PLAYER_HISTORY,
-        JSON.stringify(playerHistory)
+        JSON.stringify(CORE.playerHistory)
     );
 
 }
@@ -164,13 +192,33 @@ function dist(x1,y1,x2,y2){
 
 function currentCoord(){
 
-    const c=
-    game_data.village.coord.split('|');
+    try{
 
-    return{
-        x:+c[0],
-        y:+c[1]
-    };
+        const c=
+        game_data.village.coord
+        .split('|');
+
+        return{
+            x:+c[0],
+            y:+c[1]
+        };
+
+    }catch(e){
+
+        return{
+            x:500,
+            y:500
+        };
+
+    }
+
+}
+
+function safeNumber(v){
+
+    return isNaN(v)
+    ?0
+    :Number(v);
 
 }
 
@@ -180,8 +228,6 @@ function currentCoord(){
 
 const floatBtn=
 document.createElement('div');
-
-floatBtn.id='twmpro_float';
 
 floatBtn.innerHTML='⚔';
 
@@ -215,16 +261,22 @@ document.body.appendChild(floatBtn);
    PANEL
 ========================================= */
 
-const panel=document.createElement('div');
-
-panel.id='twmpro_panel';
+const panel=
+document.createElement('div');
 
 panel.style.position='fixed';
-panel.style.left=cfg.panelX+'px';
-panel.style.top=cfg.panelY+'px';
 
-panel.style.width=cfg.panelW+'px';
-panel.style.height=cfg.panelH+'px';
+panel.style.left=
+CORE.cfg.panelX+'px';
+
+panel.style.top=
+CORE.cfg.panelY+'px';
+
+panel.style.width=
+CORE.cfg.panelW+'px';
+
+panel.style.height=
+CORE.cfg.panelH+'px';
 
 panel.style.background='#f4e4bc';
 panel.style.border='2px solid #7a5b2e';
@@ -232,7 +284,7 @@ panel.style.border='2px solid #7a5b2e';
 panel.style.zIndex='999998';
 
 panel.style.display=
-cfg.minimized
+CORE.cfg.minimized
 ?'none'
 :'flex';
 
@@ -263,7 +315,7 @@ justify-content:space-between;
 align-items:center;
 ">
 
-<span>TWMPRO v14</span>
+<span>TWMPRO v16 ULTRA</span>
 
 <div>
 
@@ -290,27 +342,64 @@ R
 <input
 id="tw_radius"
 type="number"
-value="${cfg.radius}"
+value="${CORE.cfg.radius}"
 style="width:50px">
 
 <button id="tw_scan">
 SCAN
 </button>
 
-<button id="tw_import_af">
-IMPORT AF
+<button id="tw_import_place">
+IMPORT PLACE
 </button>
 
 <input
 id="tw_search"
 placeholder="search"
+value="${CORE.cfg.search}"
 style="width:140px">
+
+<select id="tw_sort">
+
+<option value="distance">
+DIST
+</option>
+
+<option value="points">
+POINTS
+</option>
+
+<option value="player">
+PLAYER
+</option>
+
+<option value="ally">
+ALLY
+</option>
+
+<option value="status">
+STATUS
+</option>
+
+</select>
+
+<select id="tw_sort_dir">
+
+<option value="asc">
+ASC
+</option>
+
+<option value="desc">
+DESC
+</option>
+
+</select>
 
 <label>
 <input
 type="checkbox"
 id="tw_barbs"
-${cfg.showBarbs?'checked':''}>
+${CORE.cfg.showBarbs?'checked':''}>
 BARB
 </label>
 
@@ -318,7 +407,7 @@ BARB
 <input
 type="checkbox"
 id="tw_players"
-${cfg.showPlayers?'checked':''}>
+${CORE.cfg.showPlayers?'checked':''}>
 PLAYERS
 </label>
 
@@ -326,7 +415,7 @@ PLAYERS
 <input
 type="checkbox"
 id="tw_known"
-${cfg.showKnown?'checked':''}>
+${CORE.cfg.showKnown?'checked':''}>
 KNOWN
 </label>
 
@@ -334,7 +423,7 @@ KNOWN
 <input
 type="checkbox"
 id="tw_unknown"
-${cfg.showUnknown?'checked':''}>
+${CORE.cfg.showUnknown?'checked':''}>
 NEW
 </label>
 
@@ -342,8 +431,16 @@ NEW
 <input
 type="checkbox"
 id="tw_only_unknown"
-${cfg.onlyUnknown?'checked':''}>
+${CORE.cfg.onlyUnknown?'checked':''}>
 ONLY NEW
+</label>
+
+<label>
+<input
+type="checkbox"
+id="tw_auto_refresh"
+${CORE.cfg.autoRefresh?'checked':''}>
+AUTO
 </label>
 
 </div>
@@ -373,44 +470,126 @@ background:#f8eed1;
 document.body.appendChild(panel);
 
 /* =========================================
-   MINIMIZE
+   PANEL CONTROL
 ========================================= */
 
-function minimize(){
-
-    panel.style.display='none';
-
-    cfg.minimized=true;
-
-    saveConfig();
-
-}
-
-function maximize(){
+CORE.openPanel=()=>{
 
     panel.style.display='flex';
 
-    cfg.minimized=false;
+    CORE.cfg.minimized=false;
 
     saveConfig();
 
-}
+};
+
+CORE.closePanel=()=>{
+
+    panel.style.display='none';
+
+    CORE.cfg.minimized=true;
+
+    saveConfig();
+
+};
 
 document
 .querySelector('#tw_minimize')
-.onclick=minimize;
+.onclick=CORE.closePanel;
 
 floatBtn.onclick=()=>{
 
     if(panel.style.display==='none'){
 
-        maximize();
+        CORE.openPanel();
 
     }else{
 
-        minimize();
+        CORE.closePanel();
 
     }
+
+};
+
+/* =========================================
+   SAFE FETCH
+========================================= */
+
+async function safeFetch(
+    url,
+    retries=3
+){
+
+    for(let i=0;i<retries;i++){
+
+        try{
+
+            const r=
+            await fetch(url);
+
+            if(r.ok){
+
+                return await r.text();
+
+            }
+
+        }catch(e){}
+
+        await new Promise(r=>
+            setTimeout(r,1000)
+        );
+
+    }
+
+    throw new Error(
+        'Fetch failed'
+    );
+
+}
+
+/* =========================================
+   AUTO REFRESH
+========================================= */
+
+CORE.startAutoRefresh=()=>{
+
+    if(CORE.refreshTimer){
+
+        clearInterval(
+            CORE.refreshTimer
+        );
+
+    }
+
+    if(
+        !CORE.cfg.autoRefresh
+    ){
+        return;
+    }
+
+    CORE.refreshTimer=
+    setInterval(async()=>{
+
+        if(CORE.loading){
+            return;
+        }
+
+        try{
+
+            setStatus(
+                'Auto refresh...'
+            );
+
+            await CORE.loadMap();
+
+        }catch(e){
+
+            console.error(e);
+
+        }
+
+    },
+    CORE.cfg.refreshInterval*1000);
 
 };
 
@@ -418,17 +597,24 @@ floatBtn.onclick=()=>{
    LOAD MAP
 ========================================= */
 
-async function loadMap(){
+CORE.loadMap=async()=>{
+
+    if(CORE.loading)return;
+
+    CORE.loading=true;
 
     try{
 
-        setStatus('Loading players');
+        setStatus(
+            'Loading players'
+        );
 
         const playerTxt=
-        await fetch('/map/player.txt')
-        .then(r=>r.text());
+        await safeFetch(
+            '/map/player.txt'
+        );
 
-        players={};
+        CORE.players={};
 
         playerTxt
         .trim()
@@ -437,39 +623,50 @@ async function loadMap(){
 
             if(!line)return;
 
-            const p=line.split(',');
+            const p=
+            line.split(',');
 
-            players[p[0]]={
+            CORE.players[p[0]]={
 
                 id:p[0],
                 name:p[1],
                 ally:p[2],
 
-                villages:+p[3],
-                points:+p[4]
+                villages:
+                safeNumber(p[3]),
+
+                points:
+                safeNumber(p[4])
 
             };
 
             /* HISTORY */
 
-            if(!playerHistory[p[0]]){
+            if(
+                !CORE.playerHistory[p[0]]
+            ){
 
-                playerHistory[p[0]]=[];
+                CORE.playerHistory[p[0]]=[];
 
             }
 
-            playerHistory[p[0]].push({
+            CORE.playerHistory[p[0]]
+            .push({
 
                 time:Date.now(),
-                points:+p[4]
+
+                points:
+                safeNumber(p[4])
 
             });
 
             if(
-                playerHistory[p[0]].length>30
+                CORE.playerHistory[p[0]]
+                .length>30
             ){
 
-                playerHistory[p[0]].shift();
+                CORE.playerHistory[p[0]]
+                .shift();
 
             }
 
@@ -477,24 +674,33 @@ async function loadMap(){
 
         saveHistory();
 
+        /* MY ALLY */
+
         const me=
-        players[game_data.player.id];
+        CORE.players[
+            game_data.player.id
+        ];
 
         if(me){
 
-            myAlly=me.ally;
+            CORE.myAlly=me.ally;
 
         }
 
-        /* ALLIES */
+        /* =====================================
+           ALLIES
+        ===================================== */
 
-        setStatus('Loading allies');
+        setStatus(
+            'Loading allies'
+        );
 
         const allyTxt=
-        await fetch('/map/ally.txt')
-        .then(r=>r.text());
+        await safeFetch(
+            '/map/ally.txt'
+        );
 
-        allies={};
+        CORE.allies={};
 
         allyTxt
         .trim()
@@ -503,9 +709,10 @@ async function loadMap(){
 
             if(!line)return;
 
-            const a=line.split(',');
+            const a=
+            line.split(',');
 
-            allies[a[0]]={
+            CORE.allies[a[0]]={
 
                 tag:a[2]
 
@@ -513,23 +720,33 @@ async function loadMap(){
 
         });
 
-        /* VILLAGES */
+        /* =====================================
+           VILLAGES
+        ===================================== */
 
-        setStatus('Loading villages');
+        setStatus(
+            'Loading villages'
+        );
 
         const villageTxt=
-        await fetch('/map/village.txt')
-        .then(r=>r.text());
+        await safeFetch(
+            '/map/village.txt'
+        );
 
         const lines=
         villageTxt.split('\n');
 
-        const c=currentCoord();
+        const c=
+        currentCoord();
 
         const radius=
-        +document.querySelector('#tw_radius').value;
+        safeNumber(
+            document
+            .querySelector('#tw_radius')
+            .value
+        );
 
-        villages=[];
+        CORE.villages=[];
 
         let processed=0;
 
@@ -537,10 +754,13 @@ async function loadMap(){
 
             processed++;
 
-            if(processed%50000===0){
+            if(
+                processed%50000===0
+            ){
 
                 setStatus(
-                    'Processing '+processed
+                    'Processing '+
+                    processed
                 );
 
                 await new Promise(r=>
@@ -551,10 +771,14 @@ async function loadMap(){
 
             if(!line)continue;
 
-            const v=line.split(',');
+            const v=
+            line.split(',');
 
-            const x=+v[2];
-            const y=+v[3];
+            const x=
+            safeNumber(v[2]);
+
+            const y=
+            safeNumber(v[3]);
 
             const d=
             dist(
@@ -564,11 +788,13 @@ async function loadMap(){
                 y
             );
 
-            if(d>radius)continue;
+            if(d>radius)
+            continue;
 
-            villages.push({
+            CORE.villages.push({
 
                 id:v[0],
+
                 name:v[1],
 
                 x,
@@ -576,7 +802,8 @@ async function loadMap(){
 
                 playerId:v[4],
 
-                points:+v[5],
+                points:
+                safeNumber(v[5]),
 
                 distance:d
 
@@ -584,28 +811,95 @@ async function loadMap(){
 
         }
 
-        villages.sort(
-            (a,b)=>a.distance-b.distance
-        );
+        renderTable();
 
         setStatus(
-            'Loaded '+villages.length
+            'Loaded '+
+            CORE.villages.length
         );
-
-        renderTable();
 
     }catch(e){
 
         console.error(e);
 
-        setStatus('Load error');
+        setStatus(
+            'Load error'
+        );
 
     }
 
-}
+    CORE.loading=false;
+
+};
 
 /* =========================================
-   AUTO TRACKING
+   IMPORT PLACE
+========================================= */
+
+CORE.importPlace=async()=>{
+
+    try{
+
+        setStatus(
+            'Importing place'
+        );
+
+        const html=
+        await safeFetch(
+
+            '/game.php?village='+
+            game_data.village.id+
+            '&screen=place&mode=units'
+
+        );
+
+        const matches=
+        [
+            ...html.matchAll(
+                /target=(\d+)/g
+            )
+        ];
+
+        let imported=0;
+
+        matches.forEach(m=>{
+
+            const id=m[1];
+
+            if(
+                !CORE.knownBarbs[id]
+            ){
+
+                CORE.knownBarbs[id]=true;
+
+                imported++;
+
+            }
+
+        });
+
+        saveKnown();
+
+        renderTable();
+
+        setStatus(
+            'Imported '+imported
+        );
+
+    }catch(e){
+
+        console.error(e);
+
+        setStatus(
+            'Import error'
+        );
+
+    }
+
+};
+
+/* =========================================
+   LIVE TRACKING
 ========================================= */
 
 document.addEventListener(
@@ -620,20 +914,18 @@ e=>{
     const href=
     a.href||'';
 
-    /* =====================================
-       SEND TROOPS
-    ===================================== */
-
     if(
-        href.includes('screen=place')
+        href.includes('target=')
     ){
 
         const match=
-        href.match(/target=(\d+)/);
+        href.match(
+            /target=(\d+)/
+        );
 
         if(match){
 
-            knownBarbs[
+            CORE.knownBarbs[
                 match[1]
             ]=true;
 
@@ -648,76 +940,22 @@ e=>{
 });
 
 /* =========================================
-   IMPORT AF
-========================================= */
-
-async function importAF(){
-
-    try{
-
-        setStatus('Importing AF');
-
-        const html=
-        await fetch(
-            '/game.php?village='+game_data.village.id+'&screen=am_farm'
-        ).then(r=>r.text());
-
-        /* =====================================
-           FIND TARGET IDS
-        ===================================== */
-
-        const matches=
-        [...html.matchAll(/target=(\d+)/g)];
-
-        let imported=0;
-
-        matches.forEach(m=>{
-
-            const id=m[1];
-
-            if(!knownBarbs[id]){
-
-                knownBarbs[id]=true;
-
-                imported++;
-
-            }
-
-        });
-
-        saveKnown();
-
-        renderTable();
-
-        setStatus(
-            'Imported '+imported+' AF villages'
-        );
-
-    }catch(e){
-
-        console.error(e);
-
-        setStatus('AF import error');
-
-    }
-
-}
-
-/* =========================================
    PLAYER ACTIVITY
 ========================================= */
 
-function getPlayerActivity(playerId){
+function getPlayerActivity(
+    playerId
+){
 
     const h=
-    playerHistory[playerId];
+    CORE.playerHistory[playerId];
 
     if(!h || h.length<2){
 
         return{
 
             status:'UNKNOWN',
-            d1:0
+            diff:0
 
         };
 
@@ -732,28 +970,24 @@ function getPlayerActivity(playerId){
     const diff=
     latest.points-oldest.points;
 
-    let status='ACTIVE';
-
-    if(diff===0){
-
-        status='INACTIVE';
-
-    }
-
     return{
 
-        status,
-        d1:diff
+        status:
+        diff===0
+        ?'INACTIVE'
+        :'ACTIVE',
+
+        diff
 
     };
 
 }
 
 /* =========================================
-   FILTER
+   FILTER + SORT
 ========================================= */
 
-function filtered(){
+function getData(){
 
     const search=
     document
@@ -761,40 +995,56 @@ function filtered(){
     .value
     .toLowerCase();
 
-    return villages.filter(v=>{
+    CORE.cfg.search=search;
+
+    saveConfig();
+
+    let data=
+    CORE.villages.filter(v=>{
 
         const p=
-        players[v.playerId];
+        CORE.players[v.playerId];
 
         const isBarb=!p;
 
         const known=
-        knownBarbs[v.id]===true;
+        CORE.knownBarbs[v.id]
+        ===true;
 
-        if(isBarb&&!cfg.showBarbs)
-        return false;
+        /* FILTERS */
 
-        if(!isBarb&&!cfg.showPlayers)
-        return false;
+        if(
+            isBarb &&
+            !CORE.cfg.showBarbs
+        ){
+            return false;
+        }
+
+        if(
+            !isBarb &&
+            !CORE.cfg.showPlayers
+        ){
+            return false;
+        }
 
         if(isBarb){
 
             if(
-                !cfg.showKnown &&
+                !CORE.cfg.showKnown &&
                 known
             ){
                 return false;
             }
 
             if(
-                !cfg.showUnknown &&
+                !CORE.cfg.showUnknown &&
                 !known
             ){
                 return false;
             }
 
             if(
-                cfg.onlyUnknown &&
+                CORE.cfg.onlyUnknown &&
                 known
             ){
                 return false;
@@ -824,6 +1074,91 @@ function filtered(){
 
     });
 
+    /* =====================================
+       SORT
+    ===================================== */
+
+    const dir=
+    CORE.cfg.sortDir==='asc'
+    ?1
+    :-1;
+
+    data.sort((a,b)=>{
+
+        const pa=
+        CORE.players[a.playerId];
+
+        const pb=
+        CORE.players[b.playerId];
+
+        switch(
+            CORE.cfg.sortBy
+        ){
+
+            case 'distance':
+
+                return(
+                    a.distance-
+                    b.distance
+                )*dir;
+
+            case 'points':
+
+                return(
+                    a.points-
+                    b.points
+                )*dir;
+
+            case 'player':
+
+                return(
+                    (pa?.name||'')
+                    .localeCompare(
+                        pb?.name||''
+                    )
+                )*dir;
+
+            case 'ally':
+
+                return(
+                    (
+                        CORE.allies[
+                            pa?.ally
+                        ]?.tag||''
+                    )
+                    .localeCompare(
+                        (
+                            CORE.allies[
+                                pb?.ally
+                            ]?.tag||''
+                        )
+                    )
+                )*dir;
+
+            case 'status':
+
+                return(
+                    (
+                        CORE.knownBarbs[a.id]
+                        ?1
+                        :0
+                    )
+                    -
+                    (
+                        CORE.knownBarbs[b.id]
+                        ?1
+                        :0
+                    )
+                )*dir;
+
+        }
+
+        return 0;
+
+    });
+
+    return data;
+
 }
 
 /* =========================================
@@ -833,7 +1168,7 @@ function filtered(){
 function renderTable(){
 
     const data=
-    filtered();
+    getData();
 
     let html=`
 
@@ -867,12 +1202,13 @@ z-index:5;
     data.forEach(v=>{
 
         const p=
-        players[v.playerId];
+        CORE.players[v.playerId];
 
         const isBarb=!p;
 
         const known=
-        knownBarbs[v.id]===true;
+        CORE.knownBarbs[v.id]
+        ===true;
 
         let bg='#f8eed1';
 
@@ -886,7 +1222,7 @@ z-index:5;
 
         if(
             p &&
-            p.ally===myAlly
+            p.ally===CORE.myAlly
         ){
 
             bg='#c9d8ff';
@@ -896,7 +1232,7 @@ z-index:5;
         const relation=
         (
             p &&
-            p.ally===myAlly
+            p.ally===CORE.myAlly
         )
         ?'🛡 TRIBE'
         :'';
@@ -959,7 +1295,7 @@ ${v.points}
 </td>
 
 <td>
-${p?allies[p.ally]?.tag||'':''}
+${p?CORE.allies[p.ally]?.tag||'':''}
 </td>
 
 <td>
@@ -972,7 +1308,7 @@ ${
 act
 ?`
 ${act.status}<br>
-Δ ${act.d1}
+Δ ${act.diff}
 `
 :''
 }
@@ -1012,22 +1348,49 @@ known
 
 document
 .querySelector('#tw_scan')
-.onclick=loadMap;
+.onclick=CORE.loadMap;
 
 document
-.querySelector('#tw_import_af')
-.onclick=importAF;
+.querySelector('#tw_import_place')
+.onclick=CORE.importPlace;
 
 document
 .querySelector('#tw_search')
 .oninput=renderTable;
+
+document
+.querySelector('#tw_sort')
+.onchange=e=>{
+
+    CORE.cfg.sortBy=
+    e.target.value;
+
+    saveConfig();
+
+    renderTable();
+
+};
+
+document
+.querySelector('#tw_sort_dir')
+.onchange=e=>{
+
+    CORE.cfg.sortDir=
+    e.target.value;
+
+    saveConfig();
+
+    renderTable();
+
+};
 
 [
 'tw_barbs',
 'tw_players',
 'tw_known',
 'tw_unknown',
-'tw_only_unknown'
+'tw_only_unknown',
+'tw_auto_refresh'
 ]
 .forEach(id=>{
 
@@ -1043,15 +1406,25 @@ document
             tw_known:'showKnown',
             tw_unknown:'showUnknown',
 
-            tw_only_unknown:'onlyUnknown'
+            tw_only_unknown:'onlyUnknown',
+
+            tw_auto_refresh:'autoRefresh'
 
         };
 
-        cfg[
+        CORE.cfg[
             map[id]
         ]=e.target.checked;
 
         saveConfig();
+
+        if(
+            id==='tw_auto_refresh'
+        ){
+
+            CORE.startAutoRefresh();
+
+        }
 
         renderTable();
 
@@ -1086,8 +1459,11 @@ document.onmouseup=()=>{
 
     drag=false;
 
-    cfg.panelX=panel.offsetLeft;
-    cfg.panelY=panel.offsetTop;
+    CORE.cfg.panelX=
+    panel.offsetLeft;
+
+    CORE.cfg.panelY=
+    panel.offsetTop;
 
     saveConfig();
 
@@ -1109,26 +1485,34 @@ document.onmousemove=e=>{
    DESTROY
 ========================================= */
 
-function destroy(){
+CORE.destroy=()=>{
+
+    if(CORE.refreshTimer){
+
+        clearInterval(
+            CORE.refreshTimer
+        );
+
+    }
 
     panel.remove();
 
     floatBtn.remove();
 
-    delete window.TWMPRO_RUNNING;
-    delete window.TWMPRO_DESTROY;
+    delete window.TWMPRO_CORE;
 
-}
+};
 
-window.TWMPRO_DESTROY=destroy;
-
-document
-.querySelector('#tw_close')
-.onclick=destroy;
+window.TWMPRO_DESTROY=
+CORE.destroy;
 
 /* =========================================
    INIT
 ========================================= */
+
+CORE.startAutoRefresh();
+
+CORE.loadMap();
 
 setStatus('Ready');
 
