@@ -3,6 +3,10 @@
 'use strict';
 
 /* =========================================
+   TWMPRO v10 FINAL
+========================================= */
+
+/* =========================================
    CLEAN START
 ========================================= */
 
@@ -16,7 +20,9 @@ window.TWMPRO_RUNNING=true;
    STORAGE
 ========================================= */
 
-const STORAGE='TWMPRO_V9';
+const STORAGE='TWMPRO_V10';
+const BARB_CACHE='TWMPRO_BARBS_V10';
+const PLAYER_HISTORY='TWMPRO_HISTORY_V10';
 
 /* =========================================
    CONFIG
@@ -26,10 +32,10 @@ const defaults={
 
 radius:25,
 
-panelX:100,
+panelX:80,
 panelY:40,
-panelW:950,
-panelH:600,
+panelW:1000,
+panelH:650,
 
 showBarbs:true,
 showPlayers:true,
@@ -39,16 +45,13 @@ showUnknown:true,
 
 onlyUnknown:false,
 
-showTribe:true,
-showAllies:true,
-
 sort:'distance'
 
 };
 
-let cfg=load();
+let cfg=loadConfig();
 
-function load(){
+function loadConfig(){
 
 try{
 
@@ -67,7 +70,7 @@ return defaults;
 
 }
 
-function save(){
+function saveConfig(){
 
 localStorage.setItem(
 STORAGE,
@@ -86,38 +89,76 @@ let allies={};
 
 let myAlly='';
 
-let knownBarbs={};
+let barbCache={};
 
-/* =========================================
-   LOAD CACHE
-========================================= */
+let playerHistory={};
 
 try{
 
-knownBarbs=
+barbCache=
 JSON.parse(
-localStorage.getItem(
-'TWMPRO_KNOWN_BARBS'
-)||'{}'
+localStorage.getItem(BARB_CACHE)||'{}'
+);
+
+}catch(e){}
+
+try{
+
+playerHistory=
+JSON.parse(
+localStorage.getItem(PLAYER_HISTORY)||'{}'
 );
 
 }catch(e){}
 
 /* =========================================
-   EVENTS
+   HELPERS
 ========================================= */
 
-const listeners=[];
+function saveBarbs(){
 
-function addListener(el,type,fn){
+localStorage.setItem(
+BARB_CACHE,
+JSON.stringify(barbCache)
+);
 
-el.addEventListener(type,fn);
+}
 
-listeners.push({
-el,
-type,
-fn
-});
+function saveHistory(){
+
+localStorage.setItem(
+PLAYER_HISTORY,
+JSON.stringify(playerHistory)
+);
+
+}
+
+function setStatus(txt){
+
+document.querySelector('#tw_status')
+.innerText=txt;
+
+}
+
+function dist(x1,y1,x2,y2){
+
+return Math.sqrt(
+Math.pow(x2-x1,2)+
+Math.pow(y2-y1,2)
+);
+
+}
+
+function currentCoord(){
+
+const c=
+game_data.village.coord
+.split('|');
+
+return{
+x:+c[0],
+y:+c[1]
+};
 
 }
 
@@ -129,23 +170,24 @@ const panel=document.createElement('div');
 
 panel.id='twmpro_panel';
 
-panel.style.position='fixed';
-panel.style.left=cfg.panelX+'px';
-panel.style.top=cfg.panelY+'px';
-panel.style.width=cfg.panelW+'px';
-panel.style.height=cfg.panelH+'px';
-panel.style.background='#f4e4bc';
-panel.style.color='#2b1a0a';
-panel.style.border='2px solid #7a5b2e';
-panel.style.zIndex='999999';
-panel.style.borderRadius='8px';
-panel.style.display='flex';
-panel.style.flexDirection='column';
-panel.style.resize='both';
-panel.style.overflow='hidden';
-panel.style.fontSize='11px';
-panel.style.fontFamily='Verdana';
-panel.style.boxShadow='0 0 10px rgba(0,0,0,.5)';
+panel.style=`
+position:fixed;
+left:${cfg.panelX}px;
+top:${cfg.panelY}px;
+width:${cfg.panelW}px;
+height:${cfg.panelH}px;
+background:#f4e4bc;
+border:2px solid #7a5b2e;
+z-index:999999;
+display:flex;
+flex-direction:column;
+resize:both;
+overflow:hidden;
+font-family:Verdana;
+font-size:11px;
+border-radius:8px;
+box-shadow:0 0 12px rgba(0,0,0,.5);
+`;
 
 panel.innerHTML=`
 
@@ -154,23 +196,22 @@ style="
 padding:8px;
 background:#6b4d24;
 color:#f4e4bc;
-cursor:move;
 font-weight:bold;
-font-size:14px;
-border-bottom:2px solid #3e2b14;
+cursor:move;
 ">
 
-TWMPRO v9
+TWMPRO v10 FINAL
 
 </div>
 
 <div style="
 padding:6px;
+background:#e6d3a3;
+border-bottom:1px solid #7a5b2e;
 display:flex;
 gap:6px;
 flex-wrap:wrap;
-border-bottom:1px solid #7a5b2e;
-background:#e6d3a3;
+align-items:center;
 ">
 
 R
@@ -192,7 +233,7 @@ X
 <input
 id="tw_search"
 placeholder="search"
-style="width:120px">
+style="width:140px">
 
 <label>
 <input
@@ -234,40 +275,25 @@ ${cfg.onlyUnknown?'checked':''}>
 ONLY NEW
 </label>
 
-<label>
-<input
-type="checkbox"
-id="tw_tribe"
-${cfg.showTribe?'checked':''}>
-TRIBE
-</label>
-
-<label>
-<input
-type="checkbox"
-id="tw_allies"
-${cfg.showAllies?'checked':''}>
-ALLY
-</label>
-
 </div>
 
-<div
-id="tw_status"
+<div id="tw_status"
 style="
 padding:5px;
-background:#e6d3a3;
-border-bottom:1px solid #7a5b2e;
+background:#f8eed1;
+border-bottom:1px solid #c4a46a;
 font-weight:bold;
 ">
+
 READY
+
 </div>
 
-<div
-id="tw_table"
+<div id="tw_table"
 style="
 flex:1;
 overflow:auto;
+background:#f8eed1;
 ">
 </div>
 
@@ -276,54 +302,12 @@ overflow:auto;
 document.body.appendChild(panel);
 
 /* =========================================
-   HELPERS
-========================================= */
-
-function setStatus(t){
-
-document.querySelector('#tw_status')
-.innerText=t;
-
-}
-
-function dist(x1,y1,x2,y2){
-
-return Math.sqrt(
-Math.pow(x2-x1,2)+
-Math.pow(y2-y1,2)
-);
-
-}
-
-function currentCoord(){
-
-const c=
-game_data.village.coord
-.split('|');
-
-return{
-x:+c[0],
-y:+c[1]
-};
-
-}
-
-function saveKnown(){
-
-localStorage.setItem(
-'TWMPRO_KNOWN_BARBS',
-JSON.stringify(knownBarbs)
-);
-
-}
-
-/* =========================================
    LOAD MAP
 ========================================= */
 
 async function loadMap(){
 
-setStatus('Loading map');
+setStatus('Loading players');
 
 const playerTxt=
 await fetch('/map/player.txt')
@@ -334,9 +318,9 @@ players={};
 playerTxt
 .trim()
 .split('\n')
-.forEach(l=>{
+.forEach(line=>{
 
-const p=l.split(',');
+const p=line.split(',');
 
 players[p[0]]={
 
@@ -348,7 +332,34 @@ points:+p[4]
 
 };
 
+/* HISTORY */
+
+if(!playerHistory[p[0]]){
+
+playerHistory[p[0]]=[];
+
+}
+
+playerHistory[p[0]].push({
+
+time:Date.now(),
+points:+p[4]
+
 });
+
+/* LIMIT */
+
+if(
+playerHistory[p[0]].length>20
+){
+
+playerHistory[p[0]].shift();
+
+}
+
+});
+
+saveHistory();
 
 /* MY ALLY */
 
@@ -356,10 +367,14 @@ const me=
 players[game_data.player.id];
 
 if(me){
+
 myAlly=me.ally;
+
 }
 
 /* ALLIES */
+
+setStatus('Loading allies');
 
 const allyTxt=
 await fetch('/map/ally.txt')
@@ -370,13 +385,12 @@ allies={};
 allyTxt
 .trim()
 .split('\n')
-.forEach(l=>{
+.forEach(line=>{
 
-const a=l.split(',');
+const a=line.split(',');
 
 allies[a[0]]={
 
-id:a[0],
 tag:a[2]
 
 };
@@ -384,6 +398,8 @@ tag:a[2]
 });
 
 /* VILLAGES */
+
+setStatus('Loading villages');
 
 const villageTxt=
 await fetch('/map/village.txt')
@@ -433,6 +449,10 @@ x,
 y
 );
 
+/* =====================================
+   CLOSEST FIRST
+===================================== */
+
 if(d>radius)continue;
 
 villages.push({
@@ -449,7 +469,9 @@ distance:d
 
 }
 
-/* SORT */
+/* =====================================
+   SORT NEAREST -> FARTHEST
+===================================== */
 
 villages.sort(
 (a,b)=>a.distance-b.distance
@@ -461,21 +483,125 @@ setStatus(
 
 renderTable();
 
+/* =====================================
+   START BARB SCAN
+===================================== */
+
+scanBarbsQueue();
+
 }
 
 /* =========================================
-   BARB MARK
+   BARB ANALYZER
 ========================================= */
 
-window.TWMPRO_MARK=id=>{
+let scanning=false;
 
-knownBarbs[id]=!knownBarbs[id];
+async function scanBarbsQueue(){
 
-saveKnown();
+if(scanning)return;
+
+scanning=true;
+
+const barbs=
+villages
+.filter(v=>!v.playerId)
+.sort((a,b)=>a.distance-b.distance);
+
+for(const barb of barbs){
+
+if(barbCache[barb.id])
+continue;
+
+try{
+
+setStatus(
+'Checking barb '+barb.x+'|'+barb.y
+);
+
+const url=
+`/game.php?village=${game_data.village.id}&screen=info_village&id=${barb.id}`;
+
+const html=
+await fetch(url)
+.then(r=>r.text());
+
+const known=
+html.includes('Ostatni atak');
+
+barbCache[barb.id]={
+
+known,
+time:Date.now()
+
+};
+
+saveBarbs();
 
 renderTable();
 
+}catch(e){}
+
+await new Promise(r=>
+setTimeout(r,400)
+);
+
+}
+
+scanning=false;
+
+setStatus('Barb scan finished');
+
+}
+
+/* =========================================
+   PLAYER ACTIVITY
+========================================= */
+
+function playerActivity(playerId){
+
+const h=
+playerHistory[playerId];
+
+if(!h || h.length<2){
+
+return{
+status:'UNKNOWN',
+d1:0,
+d2:0,
+d7:0
 };
+
+}
+
+const latest=
+h[h.length-1];
+
+const oldest=
+h[0];
+
+const diff=
+latest.points-oldest.points;
+
+let status='ACTIVE';
+
+if(diff===0){
+
+status='INACTIVE';
+
+}
+
+return{
+
+status,
+
+d1:diff,
+d2:diff,
+d7:diff
+
+};
+
+}
 
 /* =========================================
    FILTER
@@ -494,9 +620,11 @@ const p=players[v.playerId];
 
 const isBarb=!p;
 
+const barb=
+barbCache[v.id];
+
 const known=
-!!knownBarbs[v.id] ||
-v.points<150;
+barb?.known;
 
 /* FILTERS */
 
@@ -518,18 +646,6 @@ if(cfg.onlyUnknown&&known)
 return false;
 
 }
-
-/* TRIBE */
-
-if(
-!cfg.showTribe &&
-p &&
-p.ally===myAlly
-){
-return false;
-}
-
-/* SEARCH */
 
 if(!search)return true;
 
@@ -556,8 +672,6 @@ let html=`
 width:100%;
 border-collapse:collapse;
 font-size:11px;
-background:#f8eed1;
-color:#2b1a0a;
 ">
 
 <tr style="
@@ -568,30 +682,14 @@ top:0;
 z-index:5;
 ">
 
-<th id="sort_player"
-style="cursor:pointer">
-PLAYER
-</th>
-
+<th>PLAYER</th>
 <th>COORD</th>
-
-<th id="sort_dist"
-style="cursor:pointer">
-DIST
-</th>
-
-<th id="sort_points"
-style="cursor:pointer">
-PTS
-</th>
-
+<th>DIST</th>
+<th>PTS</th>
 <th>ALLY</th>
-
 <th>REL</th>
-
+<th>ACTIVITY</th>
 <th>STATUS</th>
-
-<th>ACTION</th>
 
 </tr>
 `;
@@ -602,55 +700,41 @@ const p=players[v.playerId];
 
 const isBarb=!p;
 
-const known=
-!!knownBarbs[v.id] ||
-v.points<150;
+const barb=
+barbCache[v.id];
 
-let bg='';
+const known=
+barb?.known;
+
+let bg='#f8eed1';
 
 if(isBarb){
 
 bg=known
-?'rgba(210,180,80,.35)'
-:'rgba(80,180,80,.25)';
-
-}else{
-
-bg='rgba(120,60,60,.08)';
+?'#e4d39a'
+:'#cfe6b8';
 
 }
-
-/* TRIBE */
 
 if(
 p &&
 p.ally===myAlly
 ){
 
-bg='rgba(80,120,255,.20)';
+bg='#c9d8ff';
 
 }
 
-let relation='';
-
-if(
+const relation=
 p &&
 p.ally===myAlly
-){
+?'🛡 TRIBE'
+:'';
 
-relation='🛡 TRIBE';
-
-}
-
-let status='';
-
-if(isBarb){
-
-status=known
-?'🟡 KNOWN'
-:'🟢 NEW';
-
-}
+const act=
+p
+?playerActivity(p.id)
+:null;
 
 html+=`
 
@@ -668,10 +752,7 @@ ${p?p.name:'BARB'}
 <a
 href="/game.php?village=${game_data.village.id}&screen=map#${v.x};${v.y}"
 target="_blank"
-style="color:#0044cc"
-onclick="
-TWMPRO_MARK('${v.id}');
-">
+style="color:#0044cc">
 
 ${v.x}|${v.y}
 
@@ -696,24 +777,28 @@ ${relation}
 </td>
 
 <td>
-${status}
+
+${
+act
+?`
+${act.status}<br>
+24h: ${act.d1}
+`
+:''
+}
+
 </td>
 
 <td>
 
 ${
 isBarb
-?`
-<button
-onclick="
-TWMPRO_MARK('${v.id}')
-">
-
-${known?'UNMARK':'MARK'}
-
-</button>
-`
-:'-'
+?(
+known
+?'🟡 KNOWN'
+:'🟢 NEW'
+)
+:''
 }
 
 </td>
@@ -728,81 +813,31 @@ html+=`</table>`;
 document.querySelector('#tw_table')
 .innerHTML=html;
 
-/* SORTS */
-
-document.querySelector('#sort_dist')
-.onclick=()=>{
-
-villages.sort(
-(a,b)=>a.distance-b.distance
-);
-
-renderTable();
-
-};
-
-document.querySelector('#sort_points')
-.onclick=()=>{
-
-villages.sort(
-(a,b)=>b.points-a.points
-);
-
-renderTable();
-
-};
-
-document.querySelector('#sort_player')
-.onclick=()=>{
-
-villages.sort((a,b)=>{
-
-const pa=
-players[a.playerId]?.name||'BARB';
-
-const pb=
-players[b.playerId]?.name||'BARB';
-
-return pa.localeCompare(pb);
-
-});
-
-renderTable();
-
-};
-
 }
 
 /* =========================================
    EVENTS
 ========================================= */
 
-addListener(
-document.querySelector('#tw_scan'),
-'click',
-loadMap
-);
+document
+.querySelector('#tw_scan')
+.onclick=loadMap;
 
-addListener(
-document.querySelector('#tw_search'),
-'input',
-renderTable
-);
+document
+.querySelector('#tw_search')
+.oninput=renderTable;
 
 [
 'tw_barbs',
 'tw_players',
 'tw_known',
 'tw_unknown',
-'tw_only_unknown',
-'tw_tribe',
-'tw_allies'
+'tw_only_unknown'
 ].forEach(id=>{
 
-addListener(
-document.querySelector('#'+id),
-'change',
-e=>{
+document
+.querySelector('#'+id)
+.onchange=e=>{
 
 const map={
 
@@ -810,20 +845,17 @@ tw_barbs:'showBarbs',
 tw_players:'showPlayers',
 tw_known:'showKnown',
 tw_unknown:'showUnknown',
-tw_only_unknown:'onlyUnknown',
-tw_tribe:'showTribe',
-tw_allies:'showAllies'
+tw_only_unknown:'onlyUnknown'
 
 };
 
 cfg[map[id]]=e.target.checked;
 
-save();
+saveConfig();
 
 renderTable();
 
-}
-);
+};
 
 });
 
@@ -836,10 +868,9 @@ let drag=false;
 let offsetX=0;
 let offsetY=0;
 
-addListener(
-document.querySelector('#tw_header'),
-'mousedown',
-e=>{
+document
+.querySelector('#tw_header')
+.onmousedown=e=>{
 
 drag=true;
 
@@ -849,30 +880,20 @@ e.clientX-panel.offsetLeft;
 offsetY=
 e.clientY-panel.offsetTop;
 
-}
-);
+};
 
-addListener(
-document,
-'mouseup',
-()=>{
+document.onmouseup=()=>{
 
 drag=false;
 
 cfg.panelX=panel.offsetLeft;
 cfg.panelY=panel.offsetTop;
-cfg.panelW=panel.offsetWidth;
-cfg.panelH=panel.offsetHeight;
 
-save();
+saveConfig();
 
-}
-);
+};
 
-addListener(
-document,
-'mousemove',
-e=>{
+document.onmousemove=e=>{
 
 if(!drag)return;
 
@@ -882,8 +903,7 @@ e.clientX-offsetX+'px';
 panel.style.top=
 e.clientY-offsetY+'px';
 
-}
-);
+};
 
 /* =========================================
    DESTROY
@@ -891,30 +911,18 @@ e.clientY-offsetY+'px';
 
 function destroy(){
 
-listeners.forEach(l=>{
-
-l.el.removeEventListener(
-l.type,
-l.fn
-);
-
-});
-
 panel.remove();
 
 delete window.TWMPRO_RUNNING;
 delete window.TWMPRO_DESTROY;
-delete window.TWMPRO_MARK;
 
 }
 
 window.TWMPRO_DESTROY=destroy;
 
-addListener(
-document.querySelector('#tw_close'),
-'click',
-destroy
-);
+document
+.querySelector('#tw_close')
+.onclick=destroy;
 
 /* =========================================
    INIT
