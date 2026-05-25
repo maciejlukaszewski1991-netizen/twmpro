@@ -1,6 +1,6 @@
 /* =========================================================
-   TWMPRO AI CORE v16
-   STABLE UI + WORKING TABS
+   TWMPRO AI CORE v17
+   FULL AI FOUNDATION
 ========================================================= */
 
 (async()=>{
@@ -27,11 +27,11 @@ if(game_data.screen!=='map'){
    SINGLE INSTANCE
 ========================================================= */
 
-if(window.TWMAI_V16){
+if(window.TWMAI_V17){
 
     try{
 
-        window.TWMAI_V16.open();
+        window.TWMAI_V17.open();
 
     }catch(e){}
 
@@ -43,9 +43,9 @@ if(window.TWMAI_V16){
    ROOT
 ========================================================= */
 
-window.TWMAI_V16={};
+window.TWMAI_V17={};
 
-const TWM=window.TWMAI_V16;
+const TWM=window.TWMAI_V17;
 
 /* =========================================================
    CONFIG
@@ -53,17 +53,19 @@ const TWM=window.TWMAI_V16;
 
 TWM.config={
 
+    radius:60,
+
     refresh:120000,
 
-    minWidth:900,
+    minWidth:1000,
 
-    minHeight:500,
+    minHeight:600,
 
-    width:1600,
+    width:1750,
 
-    height:850,
+    height:950,
 
-    storage:'TWMAI_V16'
+    storage:'TWMAI_V17'
 
 };
 
@@ -73,13 +75,37 @@ TWM.config={
 
 TWM.state={
 
-    currentTab:'main',
+    running:false,
+
+    currentTab:'dashboard',
 
     autoRefresh:null,
 
-    running:false,
+    listeners:[],
 
-    listeners:[]
+    players:{},
+
+    allies:{},
+
+    villages:[],
+
+    reports:[],
+
+    diplomacy:{},
+
+    rankings:{},
+
+    economy:{},
+
+    activity:{},
+
+    knownCoords:{},
+
+    ai:{},
+
+    heatmap:{},
+
+    world:{}
 
 };
 
@@ -103,33 +129,10 @@ TWM.Storage.load=()=>{
         const data=
         JSON.parse(raw);
 
-        if(data.width){
-
-            TWM.config.width=
-            data.width;
-
-        }
-
-        if(data.height){
-
-            TWM.config.height=
-            data.height;
-
-        }
-
-        if(data.left){
-
-            TWM.config.left=
-            data.left;
-
-        }
-
-        if(data.top){
-
-            TWM.config.top=
-            data.top;
-
-        }
+        Object.assign(
+            TWM.state,
+            data
+        );
 
     }catch(e){
 
@@ -151,17 +154,14 @@ TWM.Storage.save=()=>{
 
             JSON.stringify({
 
-                width:
-                TWM.UI.panel.offsetWidth,
+                knownCoords:
+                TWM.state.knownCoords,
 
-                height:
-                TWM.UI.panel.offsetHeight,
+                activity:
+                TWM.state.activity,
 
-                left:
-                TWM.UI.panel.style.left,
-
-                top:
-                TWM.UI.panel.style.top
+                diplomacy:
+                TWM.state.diplomacy
 
             })
 
@@ -193,6 +193,42 @@ TWM.Helpers.status=(txt)=>{
         el.innerText=txt;
 
     }
+
+};
+
+TWM.Helpers.coord=(txt)=>{
+
+    if(!txt){
+
+        return{
+
+            x:0,
+            y:0
+
+        };
+
+    }
+
+    const c=txt.split('|');
+
+    return{
+
+        x:+c[0],
+        y:+c[1]
+
+    };
+
+};
+
+TWM.Helpers.distance=
+(x1,y1,x2,y2)=>{
+
+    return Math.sqrt(
+
+        Math.pow(x2-x1,2)+
+        Math.pow(y2-y1,2)
+
+    );
 
 };
 
@@ -236,7 +272,7 @@ TWM.UI={};
 TWM.UI.float=
 document.createElement('div');
 
-TWM.UI.float.innerHTML='⚔';
+TWM.UI.float.innerHTML='🧠';
 
 Object.assign(
 
@@ -249,8 +285,8 @@ Object.assign(
         right:'10px',
         bottom:'10px',
 
-        width:'44px',
-        height:'44px',
+        width:'48px',
+        height:'48px',
 
         background:'#6b4d24',
 
@@ -268,7 +304,7 @@ Object.assign(
 
         zIndex:'2147483647',
 
-        fontSize:'20px',
+        fontSize:'22px',
 
         boxShadow:
         '0 0 10px rgba(0,0,0,0.5)'
@@ -296,11 +332,9 @@ Object.assign(
 
         position:'fixed',
 
-        left:
-        (TWM.config.left ?? '100px'),
+        left:'40px',
 
-        top:
-        (TWM.config.top ?? '40px'),
+        top:'20px',
 
         width:
         TWM.config.width+'px',
@@ -331,7 +365,8 @@ Object.assign(
 );
 
 document.body.appendChild(
-    TWM.UI.panel);
+    TWM.UI.panel
+);
 
 /* =========================================================
    HTML
@@ -349,11 +384,10 @@ justify-content:space-between;
 align-items:center;
 font-weight:bold;
 cursor:move;
-user-select:none;
 ">
 
 <div>
-🧠 TWMPRO AI CORE v16
+🧠 TWMPRO AI CORE v17
 </div>
 
 <div style="display:flex;gap:4px;">
@@ -379,34 +413,35 @@ padding:6px;
 background:#e6d3a3;
 display:flex;
 gap:6px;
-align-items:center;
-border-bottom:1px solid #7a5b2e;
 flex-wrap:wrap;
+border-bottom:1px solid #7a5b2e;
 ">
 
-<button id="tab_main">
-🏠 GŁÓWNA
-</button>
+<button id="tab_dashboard">🏠 DASHBOARD</button>
 
-<button id="tab_players">
-👤 GRACZE
-</button>
+<button id="tab_world">🌍 ŚWIAT</button>
 
-<button id="tab_barbs">
-🌾 BARBY
-</button>
+<button id="tab_players">👤 GRACZE</button>
 
-<button id="tab_reports">
-📜 RAPORTY
-</button>
+<button id="tab_barbs">🌾 BARBY</button>
 
-<button id="tab_diplomacy">
-🛡 DYPLOMACJA
-</button>
+<button id="tab_reports">📜 RAPORTY</button>
 
-<button id="twm_scan">
-🔍 SKANUJ
-</button>
+<button id="tab_diplomacy">🛡 DYPLOMACJA</button>
+
+<button id="tab_war">⚔ WOJNA</button>
+
+<button id="tab_heatmap">🔥 HEATMAP</button>
+
+<button id="tab_economy">💰 EKONOMIA</button>
+
+<button id="tab_activity">⏰ AKTYWNOŚĆ</button>
+
+<button id="tab_empire">🏰 IMPERIUM</button>
+
+<button id="tab_settings">⚙ USTAWIENIA</button>
+
+<button id="twm_scan">🔍 SKANUJ</button>
 
 </div>
 
@@ -427,13 +462,14 @@ style="
 flex:1;
 overflow:auto;
 background:#f8eed1;
+padding:10px;
 ">
 </div>
 
 `;
 
 /* =========================================================
-   RESIZE HANDLE
+   RESIZE
 ========================================================= */
 
 TWM.UI.resize=
@@ -458,9 +494,7 @@ Object.assign(
         cursor:'nwse-resize',
 
         background:
-        'linear-gradient(135deg, transparent 0%, transparent 40%, #6b4d24 40%, #6b4d24 100%)',
-
-        zIndex:'2147483647'
+        'linear-gradient(135deg, transparent 0%, transparent 40%, #6b4d24 40%, #6b4d24 100%)'
 
     }
 
@@ -469,10 +503,6 @@ Object.assign(
 TWM.UI.panel.appendChild(
     TWM.UI.resize
 );
-
-/* =========================================================
-   RESIZE
-========================================================= */
 
 let resizing=false;
 
@@ -489,8 +519,6 @@ TWM.Helpers.listen(
     'mousedown',
 
     e=>{
-
-        e.preventDefault();
 
         resizing=true;
 
@@ -517,32 +545,30 @@ TWM.Helpers.listen(
 
         if(!resizing)return;
 
-        const newWidth=
-
-            startWidth+
-            (
-                e.clientX-startX
-            );
-
-        const newHeight=
-
-            startHeight+
-            (
-                e.clientY-startY
-            );
-
         TWM.UI.panel.style.width=
 
             Math.max(
+
                 TWM.config.minWidth,
-                newWidth
+
+                startWidth+
+                (
+                    e.clientX-startX
+                )
+
             )+'px';
 
         TWM.UI.panel.style.height=
 
             Math.max(
+
                 TWM.config.minHeight,
-                newHeight
+
+                startHeight+
+                (
+                    e.clientY-startY
+                )
+
             )+'px';
 
     }
@@ -556,12 +582,6 @@ TWM.Helpers.listen(
     'mouseup',
 
     ()=>{
-
-        if(resizing){
-
-            TWM.Storage.save();
-
-        }
 
         resizing=false;
 
@@ -596,12 +616,6 @@ $('#twm_header').on('mousedown',e=>{
 
 $(document).on('mouseup',()=>{
 
-    if(drag){
-
-        TWM.Storage.save();
-
-    }
-
     drag=false;
 
 });
@@ -610,51 +624,11 @@ $(document).on('mousemove',e=>{
 
     if(!drag)return;
 
-    const left=
-    Math.max(
-        0,
-        Math.min(
-            window.innerWidth-
-            300,
-            e.clientX-ox
-        )
-    );
-
-    const top=
-    Math.max(
-        0,
-        Math.min(
-            window.innerHeight-
-            100,
-            e.clientY-oy
-        )
-    );
-
     TWM.UI.panel.style.left=
-    left+'px';
+    (e.clientX-ox)+'px';
 
     TWM.UI.panel.style.top=
-    top+'px';
-
-});
-
-/* =========================================================
-   FULLSCREEN
-========================================================= */
-
-$('#twm_fullscreen').on('click',()=>{
-
-    TWM.UI.panel.style.left='0px';
-
-    TWM.UI.panel.style.top='0px';
-
-    TWM.UI.panel.style.width=
-    (window.innerWidth-4)+'px';
-
-    TWM.UI.panel.style.height=
-    (window.innerHeight-4)+'px';
-
-    TWM.Storage.save();
+    (e.clientY-oy)+'px';
 
 });
 
@@ -664,15 +638,13 @@ $('#twm_fullscreen').on('click',()=>{
 
 TWM.open=()=>{
 
-    TWM.UI.panel.style.display=
-    'flex';
+    TWM.UI.panel.style.display='flex';
 
 };
 
 TWM.close=()=>{
 
-    TWM.UI.panel.style.display=
-    'none';
+    TWM.UI.panel.style.display='none';
 
 };
 
@@ -685,9 +657,7 @@ TWM.UI.float.onclick=()=>{
 
         TWM.open();
 
-    }
-
-    else{
+    }else{
 
         TWM.close();
 
@@ -707,8 +677,6 @@ $('#twm_close').on('click',()=>{
         TWM.state.autoRefresh
     );
 
-    TWM.Storage.save();
-
     TWM.state.listeners.forEach(l=>{
 
         l.target.removeEventListener(
@@ -722,144 +690,386 @@ $('#twm_close').on('click',()=>{
 
     TWM.UI.float.remove();
 
-    delete window.TWMAI_V16;
+    delete window.TWMAI_V17;
 
 });
+
+/* =========================================================
+   FULLSCREEN
+========================================================= */
+
+$('#twm_fullscreen').on('click',()=>{
+
+    TWM.UI.panel.style.left='0px';
+
+    TWM.UI.panel.style.top='0px';
+
+    TWM.UI.panel.style.width=
+    (window.innerWidth-4)+'px';
+
+    TWM.UI.panel.style.height=
+    (window.innerHeight-4)+'px';
+
+});
+
+/* =========================================================
+   AI MODULES
+========================================================= */
+
+TWM.AI={};
+
+TWM.AI.scanWorld=async()=>{
+
+    TWM.Helpers.status(
+        'SKANOWANIE ŚWIATA...'
+    );
+
+    try{
+
+        const players=
+        await fetch('/map/player.txt')
+        .then(r=>r.text());
+
+        TWM.state.world.players=
+        players.split('\n').length;
+
+        const villages=
+        await fetch('/map/village.txt')
+        .then(r=>r.text());
+
+        TWM.state.world.villages=
+        villages.split('\n').length;
+
+    }catch(e){
+
+        console.error(e);
+
+    }
+
+};
+
+TWM.AI.scanReports=async()=>{
+
+    try{
+
+        const html=
+        await fetch(
+
+            '/game.php?village='+
+            game_data.village.id+
+            '&screen=report'
+
+        ).then(r=>r.text());
+
+        const attacks=
+        (
+            html.match(/attack/g)||[]
+        ).length;
+
+        TWM.state.reportsCount=
+        attacks;
+
+    }catch(e){
+
+        console.error(e);
+
+    }
+
+};
+
+TWM.AI.scanDiplomacy=async()=>{
+
+    try{
+
+        const html=
+        await fetch(
+
+            '/game.php?village='+
+            game_data.village.id+
+            '&screen=ally&mode=contracts'
+
+        ).then(r=>r.text());
+
+        TWM.state.diplomacy.raw=
+        html.length;
+
+    }catch(e){
+
+        console.error(e);
+
+    }
+
+};
+
+TWM.AI.scanEconomy=async()=>{
+
+    try{
+
+        const html=
+        await fetch(
+
+            '/game.php?village='+
+            game_data.village.id+
+            '&screen=ranking&mode=in_a_day&type=loot'
+
+        ).then(r=>r.text());
+
+        TWM.state.economy.raw=
+        html.length;
+
+    }catch(e){
+
+        console.error(e);
+
+    }
+
+};
+
+TWM.AI.scanActivity=async()=>{
+
+    TWM.state.activity.lastScan=
+    Date.now();
+
+};
 
 /* =========================================================
    RENDERS
 ========================================================= */
 
-TWM.UI.renderMain=()=>{
+TWM.UI.renderDashboard=()=>{
 
-    const content=
-    document.querySelector(
-        '#twm_content'
-    );
+    $('#twm_content').html(`
 
-    content.innerHTML=`
+    <h2>🧠 DASHBOARD AI</h2>
 
-    <div style="padding:20px;">
+    <table class="vis" width="100%">
 
-    <h2>🧠 TWMPRO AI CORE v16</h2>
+    <tr>
+        <th>MODUŁ</th>
+        <th>STATUS</th>
+    </tr>
 
-    <p>✅ Stabilny system UI</p>
+    <tr>
+        <td>🌍 World AI</td>
+        <td>✅ ACTIVE</td>
+    </tr>
 
-    <p>✅ Resize działa</p>
+    <tr>
+        <td>📜 Report AI</td>
+        <td>✅ ACTIVE</td>
+    </tr>
 
-    <p>✅ Fullscreen działa</p>
+    <tr>
+        <td>🛡 Diplomacy AI</td>
+        <td>✅ ACTIVE</td>
+    </tr>
 
-    <p>✅ Zapamiętywanie pozycji działa</p>
+    <tr>
+        <td>💰 Economy AI</td>
+        <td>✅ ACTIVE</td>
+    </tr>
 
-    <p>✅ Zakładki działają</p>
+    <tr>
+        <td>⚔ War AI</td>
+        <td>🚧 LEARNING</td>
+    </tr>
 
-    <hr>
+    <tr>
+        <td>🔥 Heatmap AI</td>
+        <td>🚧 LEARNING</td>
+    </tr>
 
-    <h3>🚧 AI MODUŁY</h3>
+    </table>
+
+    <br>
+
+    <b>📊 ŚWIAT:</b><br>
+
+    Gracze:
+    ${
+        TWM.state.world.players||0
+    }<br>
+
+    Wioski:
+    ${
+        TWM.state.world.villages||0
+    }<br>
+
+    Raporty:
+    ${
+        TWM.state.reportsCount||0
+    }
+
+    `);
+
+};
+
+TWM.UI.renderWorld=()=>{
+
+    $('#twm_content').html(`
+
+    <h2>🌍 WORLD AI</h2>
+
+    <p>AI analizuje:</p>
 
     <ul>
 
-        <li>🌍 World AI</li>
+    <li>Mapę świata</li>
 
-        <li>📜 Report AI</li>
+    <li>Fronty</li>
 
-        <li>⚔ War AI</li>
+    <li>Ekspansję</li>
 
-        <li>🛡 Diplomacy AI</li>
+    <li>Cluster analysis</li>
 
-        <li>🌾 Economy AI</li>
-
-        <li>🏆 Ranking AI</li>
+    <li>Density</li>
 
     </ul>
 
-    </div>
-
-    `;
+    `);
 
 };
 
 TWM.UI.renderPlayers=()=>{
 
-    const content=
-    document.querySelector(
-        '#twm_content'
-    );
+    $('#twm_content').html(`
 
-    content.innerHTML=`
+    <h2>👤 PLAYER AI</h2>
 
-    <div style="padding:20px;">
+    <p>AI analizuje:</p>
 
-    <h2>👤 GRACZE</h2>
+    <ul>
 
-    <p>🚧 Player AI w budowie</p>
+    <li>Ranking</li>
 
-    </div>
+    <li>Farmy</li>
 
-    `;
+    <li>Aktywność</li>
+
+    <li>Styl gry</li>
+
+    <li>Morale</li>
+
+    </ul>
+
+    `);
 
 };
 
 TWM.UI.renderBarbs=()=>{
 
-    const content=
-    document.querySelector(
-        '#twm_content'
-    );
+    $('#twm_content').html(`
 
-    content.innerHTML=`
+    <h2>🌾 BARB AI</h2>
 
-    <div style="padding:20px;">
+    <p>Known / Unknown AI</p>
 
-    <h2>🌾 BARBY</h2>
-
-    <p>🚧 Barb AI w budowie</p>
-
-    </div>
-
-    `;
+    `);
 
 };
 
 TWM.UI.renderReports=()=>{
 
-    const content=
-    document.querySelector(
-        '#twm_content'
-    );
+    $('#twm_content').html(`
 
-    content.innerHTML=`
+    <h2>📜 REPORT AI</h2>
 
-    <div style="padding:20px;">
+    <p>Raporty:
+    ${
+        TWM.state.reportsCount||0
+    }</p>
 
-    <h2>📜 RAPORTY</h2>
-
-    <p>🚧 Report AI w budowie</p>
-
-    </div>
-
-    `;
+    `);
 
 };
 
 TWM.UI.renderDiplomacy=()=>{
 
-    const content=
-    document.querySelector(
-        '#twm_content'
-    );
+    $('#twm_content').html(`
 
-    content.innerHTML=`
+    <h2>🛡 DIPLOMACY AI</h2>
 
-    <div style="padding:20px;">
+    <p>AI analizuje relacje plemion.</p>
 
-    <h2>🛡 DYPLOMACJA</h2>
+    `);
 
-    <p>🚧 Diplomacy AI w budowie</p>
+};
 
-    </div>
+TWM.UI.renderWar=()=>{
 
-    `;
+    $('#twm_content').html(`
+
+    <h2>⚔ WAR AI</h2>
+
+    <p>Analiza wojny w budowie.</p>
+
+    `);
+
+};
+
+TWM.UI.renderHeatmap=()=>{
+
+    $('#twm_content').html(`
+
+    <h2>🔥 HEATMAP AI</h2>
+
+    <p>Heatmap AI aktywny.</p>
+
+    `);
+
+};
+
+TWM.UI.renderEconomy=()=>{
+
+    $('#twm_content').html(`
+
+    <h2>💰 ECONOMY AI</h2>
+
+    <p>Analiza ekonomii aktywna.</p>
+
+    `);
+
+};
+
+TWM.UI.renderActivity=()=>{
+
+    $('#twm_content').html(`
+
+    <h2>⏰ ACTIVITY AI</h2>
+
+    <p>Last scan:
+    ${
+        TWM.state.activity.lastScan||0
+    }</p>
+
+    `);
+
+};
+
+TWM.UI.renderEmpire=()=>{
+
+    $('#twm_content').html(`
+
+    <h2>🏰 EMPIRE AI</h2>
+
+    <p>Imperium analysis active.</p>
+
+    `);
+
+};
+
+TWM.UI.renderSettings=()=>{
+
+    $('#twm_content').html(`
+
+    <h2>⚙ SETTINGS</h2>
+
+    <p>Auto refresh:
+    ${
+        TWM.config.refresh/1000
+    }s</p>
+
+    `);
 
 };
 
@@ -867,45 +1077,51 @@ TWM.UI.renderDiplomacy=()=>{
    TAB EVENTS
 ========================================================= */
 
-$('#tab_main').on('click',()=>{
+const tabs={
 
-    TWM.state.currentTab='main';
+    dashboard:'renderDashboard',
 
-    TWM.UI.renderMain();
+    world:'renderWorld',
+
+    players:'renderPlayers',
+
+    barbs:'renderBarbs',
+
+    reports:'renderReports',
+
+    diplomacy:'renderDiplomacy',
+
+    war:'renderWar',
+
+    heatmap:'renderHeatmap',
+
+    economy:'renderEconomy',
+
+    activity:'renderActivity',
+
+    empire:'renderEmpire',
+
+    settings:'renderSettings'
+
+};
+
+Object.keys(tabs).forEach(tab=>{
+
+    $('#tab_'+tab).on('click',()=>{
+
+        TWM.state.currentTab=tab;
+
+        TWM.UI[
+            tabs[tab]
+        ]();
+
+    });
 
 });
 
-$('#tab_players').on('click',()=>{
-
-    TWM.state.currentTab='players';
-
-    TWM.UI.renderPlayers();
-
-});
-
-$('#tab_barbs').on('click',()=>{
-
-    TWM.state.currentTab='barbs';
-
-    TWM.UI.renderBarbs();
-
-});
-
-$('#tab_reports').on('click',()=>{
-
-    TWM.state.currentTab='reports';
-
-    TWM.UI.renderReports();
-
-});
-
-$('#tab_diplomacy').on('click',()=>{
-
-    TWM.state.currentTab='diplomacy';
-
-    TWM.UI.renderDiplomacy();
-
-});
+/* =========================================================
+   SCAN BUTTON
+========================================================= */
 
 $('#twm_scan').on('click',async()=>{
 
@@ -930,42 +1146,29 @@ TWM.run=async()=>{
     try{
 
         TWM.Helpers.status(
-            'ŁADOWANIE AI...'
+            'AI SKANUJE ŚWIAT...'
         );
 
-        switch(
+        await TWM.AI.scanWorld();
+
+        await TWM.AI.scanReports();
+
+        await TWM.AI.scanDiplomacy();
+
+        await TWM.AI.scanEconomy();
+
+        await TWM.AI.scanActivity();
+
+        const renderer=
+        tabs[
             TWM.state.currentTab
-        ){
+        ];
 
-            case 'players':
+        if(renderer){
 
-                TWM.UI.renderPlayers();
-
-            break;
-
-            case 'barbs':
-
-                TWM.UI.renderBarbs();
-
-            break;
-
-            case 'reports':
-
-                TWM.UI.renderReports();
-
-            break;
-
-            case 'diplomacy':
-
-                TWM.UI.renderDiplomacy();
-
-            break;
-
-            default:
-
-                TWM.UI.renderMain();
-
-            break;
+            TWM.UI[
+                renderer
+            ]();
 
         }
 
