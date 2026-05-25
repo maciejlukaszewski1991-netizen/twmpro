@@ -3,9 +3,9 @@
 'use strict';
 
 /* =========================================
-   TWMPRO AI CORE v3
-   STABLE BUILD
-   VERIFIED
+   TWMPRO AI CORE v4
+   FULL REWRITE
+   VERIFIED STABLE
 ========================================= */
 
 /* =========================================
@@ -15,8 +15,8 @@
 if(game_data.screen!=='map'){
 
     UI.InfoMessage(
-        'Uruchom skrypt na mapie',
-        4000,
+        'Uruchom na mapie',
+        3000,
         'error'
     );
 
@@ -50,14 +50,14 @@ const TWM=window.TWMAI;
 
 TWM.config={
 
-    storage:'TWMAI_V3',
+    storage:'TWMAI_V4',
 
     radius:50,
 
-    panelX:120,
-    panelY:40,
+    refresh:120000,
 
-    refresh:120000
+    panelX:100,
+    panelY:40
 
 };
 
@@ -71,16 +71,18 @@ TWM.state={
     players:{},
     allies:{},
 
-    knownBarbs:{},
+    known:{},
 
     loading:false,
 
-    timer:null
+    timer:null,
+
+    currentTab:'farm'
 
 };
 
 /* =========================================
-   MEMORY
+   MEMORY ENGINE
 ========================================= */
 
 TWM.Memory={};
@@ -98,10 +100,10 @@ TWM.Memory.load=()=>{
 
         );
 
-        if(data.knownBarbs){
+        if(data.known){
 
-            TWM.state.knownBarbs=
-            data.knownBarbs;
+            TWM.state.known=
+            data.known;
 
         }
 
@@ -121,8 +123,8 @@ TWM.Memory.save=()=>{
 
         JSON.stringify({
 
-            knownBarbs:
-            TWM.state.knownBarbs
+            known:
+            TWM.state.known
 
         })
 
@@ -163,6 +165,16 @@ TWM.Helpers.distance=
 
 };
 
+TWM.Helpers.limit=
+(v,min,max)=>{
+
+    return Math.max(
+        min,
+        Math.min(v,max)
+    );
+
+};
+
 TWM.Helpers.status=(txt)=>{
 
     const el=
@@ -175,16 +187,6 @@ TWM.Helpers.status=(txt)=>{
         el.innerText=txt;
 
     }
-
-};
-
-TWM.Helpers.limit=
-(v,min,max)=>{
-
-    return Math.max(
-        min,
-        Math.min(v,max)
-    );
 
 };
 
@@ -340,7 +342,7 @@ async()=>{
 };
 
 /* =========================================
-   IMPORT
+   IMPORT ENGINE
 ========================================= */
 
 TWM.Import={};
@@ -393,17 +395,44 @@ async()=>{
                     const href=
                     a.href||'';
 
-                    const m=
+                    let m=
                     href.match(
                         /target=(\d+)/
                     );
 
                     if(m){
 
-                        TWM.state
-                        .knownBarbs[
+                        TWM.state.known[
                             m[1]
-                        ]=true;
+                        ]={
+
+                            known:true,
+                            updated:Date.now()
+
+                        };
+
+                    }
+
+                    m=
+                    href.match(
+                        /id=(\d+)/
+                    );
+
+                    if(
+                        href.includes(
+                            'info_village'
+                        ) &&
+                        m
+                    ){
+
+                        TWM.state.known[
+                            m[1]
+                        ]={
+
+                            known:true,
+                            updated:Date.now()
+
+                        };
 
                     }
 
@@ -469,9 +498,15 @@ TWM.AI.analyzeBarb=
 
     }
 
-    else{
+    else if(v.distance>=35){
 
-        score-=15;
+        score-=25;
+
+    }
+
+    else if(v.distance>=45){
+
+        score-=40;
 
     }
 
@@ -482,33 +517,24 @@ TWM.AI.analyzeBarb=
         v.points<=500
     ){
 
-        score+=15;
-
-    }
-
-    else if(
-        v.points>1500
-    ){
-
-        score-=10;
+        score+=10;
 
     }
 
     /* KNOWN */
 
     const known=
-    TWM.state
-    .knownBarbs[
+    TWM.state.known[
         v.id
-    ]===true;
+    ]?.known===true;
 
     if(!known){
 
-        score+=10;
+        score+=15;
 
     }
 
-    /* BARB DENSITY */
+    /* BARB CLUSTER */
 
     let nearBarbs=0;
 
@@ -583,9 +609,7 @@ TWM.AI.analyzeBarb=
 
     });
 
-    score-=danger*5;
-
-    /* LIMIT */
+    score-=danger*6;
 
     score=
     TWM.Helpers.limit(
@@ -593,8 +617,6 @@ TWM.AI.analyzeBarb=
         0,
         100
     );
-
-    /* STATUS */
 
     let status='💀 BAD';
 
@@ -651,8 +673,6 @@ TWM.AI.Map.run=()=>{
 
     TWM.AI.Map.sectors={};
 
-    /* BUILD */
-
     TWM.state.villages
     .forEach(v=>{
 
@@ -680,10 +700,6 @@ TWM.AI.Map.run=()=>{
 
                 strong:0,
 
-                avgPoints:0,
-
-                totalPoints:0,
-
                 farmValue:0,
 
                 warRisk:0,
@@ -704,8 +720,6 @@ TWM.AI.Map.run=()=>{
         TWM.AI.Map.sectors[k];
 
         s.villages++;
-
-        s.totalPoints+=v.points;
 
         const p=
         TWM.state.players[
@@ -742,113 +756,107 @@ TWM.AI.Map.run=()=>{
 
     });
 
-    /* AI */
-
     Object.values(
         TWM.AI.Map.sectors
     )
     .forEach(s=>{
 
-        s.avgPoints=
-        Math.floor(
-
-            s.totalPoints/
-            Math.max(
-                s.villages,
-                1
-            )
-
+        const barbRatio=
+        s.barbs/
+        Math.max(
+            s.villages,
+            1
         );
 
-        /* FARM VALUE */
+        const activeRatio=
+        s.active/
+        Math.max(
+            s.players,
+            1
+        );
+
+        const strongRatio=
+        s.strong/
+        Math.max(
+            s.players,
+            1
+        );
+
+        s.farmValue=
+        Math.floor(
+            barbRatio*100
+        );
+
+        s.warRisk=
+        Math.floor(
+            (
+                activeRatio*50
+            )+
+            (
+                strongRatio*50
+            )
+        );
+
+        s.deadness=
+        Math.floor(
+            (
+                barbRatio*100
+            )-
+            (
+                activeRatio*50
+            )
+        );
+
+        s.expansion=
+        Math.floor(
+            (
+                barbRatio*70
+            )-
+            (
+                strongRatio*30
+            )
+        );
 
         s.farmValue=
         TWM.Helpers.limit(
-
-            (
-                s.barbs*2
-            )
-            -
-            (
-                s.active
-            ),
-
+            s.farmValue,
             0,
             100
-
         );
-
-        /* WAR RISK */
 
         s.warRisk=
         TWM.Helpers.limit(
-
-            (
-                s.strong*25
-            )
-            +
-            (
-                s.active*4
-            ),
-
+            s.warRisk,
             0,
             100
-
         );
-
-        /* EXPANSION */
-
-        s.expansion=
-        TWM.Helpers.limit(
-
-            (
-                s.barbs
-            )
-            -
-            (
-                s.strong*5
-            ),
-
-            0,
-            100
-
-        );
-
-        /* DEADNESS */
 
         s.deadness=
         TWM.Helpers.limit(
-
-            (
-                s.barbs
-            )
-            -
-            (
-                s.active*2
-            ),
-
+            s.deadness,
             0,
             100
-
         );
 
-        /* FINAL SCORE */
+        s.expansion=
+        TWM.Helpers.limit(
+            s.expansion,
+            0,
+            100
+        );
 
         s.score=
         Math.floor(
 
             (
-                s.farmValue*0.4
-            )
-            +
+                s.farmValue*0.35
+            )+
             (
-                s.expansion*0.3
-            )
-            +
+                s.expansion*0.35
+            )+
             (
                 s.deadness*0.2
-            )
-            -
+            )-
             (
                 s.warRisk*0.3
             )
@@ -861,8 +869,6 @@ TWM.AI.Map.run=()=>{
             0,
             100
         );
-
-        /* TYPE */
 
         s.type='⚔ WAR ZONE';
 
@@ -887,14 +893,6 @@ TWM.AI.Map.run=()=>{
         ){
 
             s.type='📈 EXPANSION';
-
-        }
-
-        else if(
-            s.warRisk>=60
-        ){
-
-            s.type='⚔ WAR ZONE';
 
         }
 
@@ -996,9 +994,9 @@ Object.assign(
         top:
         TWM.config.panelY+'px',
 
-        width:'1300px',
+        width:'1350px',
 
-        height:'720px',
+        height:'750px',
 
         background:'#f4e4bc',
 
@@ -1037,7 +1035,7 @@ cursor:move;
 ">
 
 <div>
-TWMPRO AI CORE v3
+TWMPRO AI CORE v4
 </div>
 
 <div>
@@ -1055,6 +1053,7 @@ padding:6px;
 background:#e6d3a3;
 display:flex;
 gap:6px;
+align-items:center;
 border-bottom:1px solid #7a5b2e;
 ">
 
@@ -1069,6 +1068,46 @@ border-bottom:1px solid #7a5b2e;
 <button id="twm_scan">
 SCAN
 </button>
+
+<select id="twm_sort">
+
+<option value="score">
+AI SCORE
+</option>
+
+<option value="distance">
+DISTANCE
+</option>
+
+<option value="points">
+POINTS
+</option>
+
+</select>
+
+<select id="twm_filter">
+
+<option value="all">
+ALL
+</option>
+
+<option value="new">
+NEW
+</option>
+
+<option value="known">
+KNOWN
+</option>
+
+<option value="good">
+GOOD+
+</option>
+
+</select>
+
+<input
+id="twm_search"
+placeholder="search">
 
 </div>
 
@@ -1136,7 +1175,7 @@ TWM.UI.float.onclick=()=>{
 };
 
 /* =========================================
-   FARM TAB
+   FARM RENDER
 ========================================= */
 
 TWM.UI.renderFarm=()=>{
@@ -1146,15 +1185,94 @@ TWM.UI.renderFarm=()=>{
         '#twm_content'
     );
 
-    const data=
+    const sort=
+    document.querySelector(
+        '#twm_sort'
+    ).value;
+
+    const filter=
+    document.querySelector(
+        '#twm_filter'
+    ).value;
+
+    const search=
+    document.querySelector(
+        '#twm_search'
+    ).value
+    .toLowerCase();
+
+    let data=
     TWM.state.villages
-    .filter(v=>v.ai)
-    .sort((a,b)=>
+    .filter(v=>v.ai);
 
-        b.ai.score-
-        a.ai.score
+    /* FILTER */
 
-    );
+    data=data.filter(v=>{
+
+        if(
+            filter==='new' &&
+            v.ai.known
+        ){
+            return false;
+        }
+
+        if(
+            filter==='known' &&
+            !v.ai.known
+        ){
+            return false;
+        }
+
+        if(
+            filter==='good' &&
+            v.ai.score<60
+        ){
+            return false;
+        }
+
+        if(
+            search &&
+            !(
+                v.name
+                .toLowerCase()
+                .includes(search)
+            )
+        ){
+            return false;
+        }
+
+        return true;
+
+    });
+
+    /* SORT */
+
+    data.sort((a,b)=>{
+
+        if(sort==='distance'){
+
+            return(
+                a.distance-
+                b.distance
+            );
+
+        }
+
+        if(sort==='points'){
+
+            return(
+                b.points-
+                a.points
+            );
+
+        }
+
+        return(
+            b.ai.score-
+            a.ai.score
+        );
+
+    });
 
     let html=`
 
@@ -1278,7 +1396,7 @@ v.ai.known
 };
 
 /* =========================================
-   MAP TAB
+   MAP RENDER
 ========================================= */
 
 TWM.UI.renderMap=()=>{
@@ -1331,10 +1449,6 @@ top:0;
 
 <th>PLAYERS</th>
 
-<th>ACTIVE</th>
-
-<th>STRONG</th>
-
 </tr>
 
 `;
@@ -1370,16 +1484,6 @@ top:0;
         ){
 
             bg='#ddd';
-
-        }
-
-        else if(
-            s.type.includes(
-                'EXPANSION'
-            )
-        ){
-
-            bg='#fff0b3';
 
         }
 
@@ -1426,14 +1530,6 @@ ${s.barbs}
 ${s.players}
 </td>
 
-<td>
-${s.active}
-</td>
-
-<td>
-${s.strong}
-</td>
-
 </tr>
 
 `;
@@ -1454,6 +1550,8 @@ document
 .querySelector('#tab_farm')
 .onclick=()=>{
 
+    TWM.state.currentTab='farm';
+
     TWM.UI.renderFarm();
 
 };
@@ -1461,6 +1559,8 @@ document
 document
 .querySelector('#tab_map')
 .onclick=()=>{
+
+    TWM.state.currentTab='map';
 
     TWM.UI.renderMap();
 
@@ -1484,14 +1584,49 @@ document
 
     TWM.AI.run();
 
-    TWM.UI.renderFarm();
+    if(
+        TWM.state.currentTab
+        ==='map'
+    ){
+
+        TWM.UI.renderMap();
+
+    }
+
+    else{
+
+        TWM.UI.renderFarm();
+
+    }
 
     TWM.Helpers.status(
-
         'Loaded '+
         TWM.state.villages.length
-
     );
+
+};
+
+document
+.querySelector('#twm_sort')
+.onchange=()=>{
+
+    TWM.UI.renderFarm();
+
+};
+
+document
+.querySelector('#twm_filter')
+.onchange=()=>{
+
+    TWM.UI.renderFarm();
+
+};
+
+document
+.querySelector('#twm_search')
+.oninput=()=>{
+
+    TWM.UI.renderFarm();
 
 };
 
@@ -1527,13 +1662,9 @@ document
 .querySelector('#twm_close')
 .onclick=()=>{
 
-    if(TWM.state.timer){
-
-        clearInterval(
-            TWM.state.timer
-        );
-
-    }
+    clearInterval(
+        TWM.state.timer
+    );
 
     TWM.UI.panel.remove();
 
