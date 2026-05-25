@@ -3,8 +3,7 @@
 'use strict';
 
 /* =========================================
-   TWMPRO v12 STABLE
-   VERIFIED BUILD
+   TWMPRO v13 FINAL STABLE
 ========================================= */
 
 /* =========================================
@@ -21,9 +20,9 @@ window.TWMPRO_RUNNING=true;
    STORAGE
 ========================================= */
 
-const STORAGE='TWMPRO_V12';
-const BARB_CACHE='TWMPRO_BARB_CACHE_V12';
-const PLAYER_HISTORY='TWMPRO_PLAYER_HISTORY_V12';
+const STORAGE='TWMPRO_V13';
+const BARB_CACHE='TWMPRO_BARB_CACHE_V13';
+const PLAYER_HISTORY='TWMPRO_PLAYER_HISTORY_V13';
 
 /* =========================================
    CONFIG
@@ -36,7 +35,7 @@ const defaults={
     panelX:80,
     panelY:40,
 
-    panelW:1000,
+    panelW:1050,
     panelH:650,
 
     showBarbs:true,
@@ -217,7 +216,7 @@ cursor:move;
 border-bottom:2px solid #3e2b14;
 ">
 
-TWMPRO v12 STABLE
+TWMPRO v13 FINAL
 
 </div>
 
@@ -492,7 +491,7 @@ async function loadMap(){
 
         }
 
-        /* SORT CLOSEST FIRST */
+        /* SORT NEAREST FIRST */
 
         villages.sort(
             (a,b)=>a.distance-b.distance
@@ -557,23 +556,33 @@ async function scanBarbsQueue(){
             .then(r=>r.text());
 
             /* =====================================
-               REAL BARB DETECTION
+               REAL FARM DETECTION
             ===================================== */
 
             let known=false;
 
             /*
                KNOWN BARB:
-               has full row:
-               <td>Ostatni atak</td>
+               has reports/history
 
-               NEW BARB:
-               row does NOT exist
+               Examples:
+               "atakuje Wioska barbarzyńska"
+               "szpieguje Wioska barbarzyńska"
+               "Własne rozkazy"
             */
 
             if(
-                /<td[^>]*>\s*Ostatni atak\s*<\/td>/i
-                .test(html)
+
+                html.includes('atakuje Wioska barbarzyńska')
+
+                ||
+
+                html.includes('szpieguje Wioska barbarzyńska')
+
+                ||
+
+                html.includes('Własne rozkazy')
+
             ){
 
                 known=true;
@@ -774,6 +783,7 @@ z-index:5;
 
 <th>PLAYER</th>
 <th>COORD</th>
+<th>ATTACK</th>
 <th>DIST</th>
 <th>PTS</th>
 <th>ALLY</th>
@@ -849,9 +859,26 @@ ${p?p.name:'BARB'}
 <a
 href="/game.php?village=${game_data.village.id}&screen=map#${v.x};${v.y}"
 target="_blank"
-style="color:#0044cc">
+style="color:#0044cc;font-weight:bold;">
 
 ${v.x}|${v.y}
+
+</a>
+
+</td>
+
+<td>
+
+<a
+href="/game.php?village=${game_data.village.id}&screen=place&target=${v.id}"
+target="_blank"
+style="
+color:#aa0000;
+font-weight:bold;
+text-decoration:none;
+">
+
+⚔ ATAK
 
 </a>
 
